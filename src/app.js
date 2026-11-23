@@ -307,6 +307,13 @@
     pg.seats = new Array(pg.seats.length).fill(null); pg.locked = []; pg.overflow = []; pg.cleared = true;
     S.sel = -1; S.selPool = null; render();
   }
+  function resetSeats() {          // 지금 칸 구성(X 포함)에서 기본 규칙(선택 과목 먼저 → 번호순)으로 다시 앉힌다
+    var pg = cur(); push();
+    S.cls.subjects = subList(S.classKey);
+    var f = newPages()[S.cur];
+    pg.seats = f.seats; pg.overflow = f.overflow; pg.locked = []; pg.blocked = []; pg.cleared = false;
+    S.sel = -1; S.selPool = null; render();
+  }
   function undoClear() {
     while (S.undo.length) {
       var u = S.undo.pop(), i = S.pages.indexOf(u.page);
@@ -847,6 +854,7 @@
     $('mergeOrder').onclick = function (e) { var d = e.target.dataset || {}; if (d.mo != null && d.mo !== '') moveMerged(+d.mo, +d.d); };
     $('btnClear').onclick = function () { if (cur().seats.some(function (x) { return x != null; })) clearSeats(); };
     $('btnUndoClear').onclick = undoClear;
+    $('btnReset').onclick = resetSeats;
     $('btnUnmerge').onclick = function () {
       var pg = cur(); if (!pg.mid) return;
       removeMerge(S.pages.indexOf(pg) - subs().length - 1);
