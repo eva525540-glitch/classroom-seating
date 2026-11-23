@@ -95,41 +95,54 @@
     await loadScript(PDFJS + 'pdf.min.js');
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js';
     var doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-    var text = '', n = doc.numPages, p;
+    var pages = [], n = doc.numPages, p;
     for (p = 1; p <= n; p++) {
       var pg = await doc.getPage(p);
-      text += pageLines(await pg.getTextContent()) + '\n';
+      pages.push(pageLines(await pg.getTextContent()));
       setStatus('글자 읽는 중… ' + p + ' / ' + n, p / n * 0.3);
     }
-    var rows = C.textToRoster(text);
-    if (rows.length) return { rows: rows, text: text };
+    var res = C.pagesToRoster(pages);
+    if (res.rows.length) return { rows: res.rows, text: pages.join('\n'), lenient: res.lenient };
     // 글자 층이 없는 스캔본 → 화면 속 글자를 인식한다(OCR)
     setStatus('스캔본으로 보여 글자 인식을 준비하는 중… (처음 한 번 데이터를 내려받습니다)', 0.3);
     await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
     var worker = await window.Tesseract.createWorker('kor', 1, {});
-    text = '';
+    await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+    pages = [];
     for (p = 1; p <= n; p++) {
-      var page = await doc.getPage(p), vp = page.getViewport({ scale: 2.4 });
+      var page = await doc.getPage(p), vp = page.getViewport({ scale: 3 });
       var cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
       await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
       var r = await worker.recognize(cv);
-      text += r.data.text + '\n';
+      pages.push(r.data.text);
       setStatus('글자 인식 중… ' + p + ' / ' + n, 0.3 + p / n * 0.7);
     }
     await worker.terminate();
-    return { rows: C.textToRoster(text), text: text };
+    res = C.pagesToRoster(pages);
+    return { rows: res.rows, text: pages.join('\n'), lenient: true, ocr: true };
   }
   function showReview(res) {
     setStatus('', null);
-    var box = $('review');
     $('reviewTxt').value = res.rows.length ? C.rosterToTSV(res.rows) : res.text;
-    $('reviewCnt').textContent = res.rows.length ? '(' + res.rows.length + '행 인식)' : '(표로 인식하지 못했습니다. 한 줄에 “학년 반 편제명 개설과목 번호 성명 비고” 순서로 고쳐 주세요)';
-    box.classList.remove('hidden');
+    var msg;
+    if (!res.rows.length) msg = '(표로 읽지 못했습니다. 아래 글자를 한 줄에 “학년 반 편제명 개설과목 번호 성명 비고” 순서로 고쳐 주세요)';
+    else if (res.lenient) msg = '(' + res.rows.length + '행 · 글자 인식이 정확하지 않을 수 있습니다. 번호와 이름을 꼭 확인해 고치세요)';
+    else msg = '(' + res.rows.length + '행 인식)';
+    $('reviewCnt').textContent = msg;
+    $('review').classList.remove('hidden');
+    showImportMsg('');
   }
   function confirmReview() {
     var t = $('reviewTxt').value, rows;
     try {
-      rows = /학년/.test(t.split(/\r?\n/, 1)[0]) && /성명/.test(t.split(/\r?\n/, 1)[0]) ? C.parseRosterText(t) : C.textToRoster(t);
+      var first = t.split(/\r?\n/, 1)[0];
+      if (/학년/.test(first) && /성명/.test(first)) {
+        var table = C.parseDelimited(t), head = table[0].map(function (h) { return h.trim(); });
+        var ni = head.indexOf('번호'), mi = head.indexOf('성명'), bad = [];
+        table.slice(1).forEach(function (r, i) { if (!/^[0-9]+$/.test((r[ni] || '').trim()) || !(r[mi] || '').trim()) bad.push(i + 2); });
+        if (bad.length) throw new Error('번호나 성명이 비어 있는 줄이 있습니다 (' + bad.slice(0, 8).join(', ') + '번째 줄' + (bad.length > 8 ? ' 외 ' + (bad.length - 8) + '곳' : '') + '). 채우거나 지워 주세요.');
+        rows = C.rowsToRoster(table);
+      } else rows = C.pagesToRoster([t]).rows.filter(function (r) { return r.no !== '' && r.name; });
       if (!rows.length) throw new Error('학생 행을 찾지 못했습니다.');
       loadRoster(rows);
     } catch (e) { showImportMsg('불러오지 못했습니다: ' + e.message); }

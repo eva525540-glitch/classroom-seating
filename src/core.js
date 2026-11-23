@@ -244,6 +244,56 @@
     }).join('\n');
   }
 
+  /* ---------- 느슨한 읽기 (스캔본 글자 인식처럼 틀린 글자가 섞인 경우) ----------
+   * 쪽 제목("2학년 ○○(3) 3반 선택 현황")에서 학년·과목·반을 얻고, 줄마다 번호·성명·비고를 추정한다.
+   * 못 읽은 번호는 빈칸으로 남겨 사람이 고치게 한다. */
+  var TITLE_RE = /(?:^|[^0-9])(\d)\s*학년\s*([^()（）]+?)\s*[(（]\s*(\d+)\s*[)）]\s*(\d+)\s*반/;
+  var NOTE_RE = /지원|전출|자퇴|별도|고사실|유예|휴학|퇴학|제적/;
+  var NAME_AT = /^[^가-힣0-9]*([가-힣]{2,4})(?![가-힣])/;
+  function lenientPage(text, ctx0) {
+    var lines = String(text).split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+    var ctx = ctx0 || { grade: '', cls: '', subject: '' };
+    var rows = [];
+    lines.forEach(function (line) {
+      var tm = TITLE_RE.exec(line);
+      if (tm && /선택|현황/.test(line)) { ctx = { grade: tm[1] + '학년', cls: tm[4] + '반', subject: tm[2].trim() + '(' + tm[3] + ')' }; return; }
+      if (/성명|개설과목|편제명/.test(line)) return;
+      var cells = line.replace(/[｜ㅣ│¦]/g, '|').split('|').map(function (c) { return c.trim(); });
+      if (cells.length < 3) cells = line.split(/\s{2,}/).map(function (c) { return c.trim(); });
+      if (cells.length < 3) return;
+      var from = cells.length >= 6 ? 4 : 3;
+      var no = '', name = '', note = '', i, m;
+      // 한 칸에 "번호 성명"이 붙어 읽힌 경우
+      for (i = cells.length - 1; i >= from && !name; i--) {
+        if ((m = /^[^0-9가-힣]*(\d{1,2})\s+([가-힣]{2,4})(?![가-힣])/.exec(cells[i]))) { no = m[1]; name = m[2]; note = cells.slice(i + 1).filter(function (c) { return /[가-힣]{2,}/.test(c); }).join(' '); }
+      }
+      if (!name) {
+        var h = [];
+        cells.forEach(function (c, k) { if (k >= from && NAME_AT.test(c)) h.push(k); });
+        if (!h.length) return;
+        var last = h[h.length - 1];
+        if (NOTE_RE.test(cells[last]) && h.length > 1) { note = cells[last].replace(/[|]/g, '').trim(); last = h[h.length - 2]; }
+        name = NAME_AT.exec(cells[last])[1];
+        for (i = last - 1; i >= 3; i--) {
+          if ((m = /^[^0-9가-힣]*(\d{1,2})[^0-9가-힣]*$/.exec(cells[i])) || (m = /(?:^|\s)(\d{1,2})[^0-9가-힣]*$/.exec(cells[i]))) { no = m[1]; break; }
+        }
+        if (!note) note = cells.slice(last + 1).filter(function (c) { return /[가-힣]{2,}/.test(c); }).join(' ');
+      }
+      rows.push({ grade: ctx.grade, cls: ctx.cls, group: '-', subjectRaw: ctx.subject, no: no === '' ? '' : parseInt(no, 10), name: name, note: note });
+    });
+    return { rows: rows, ctx: ctx };
+  }
+  /* 쪽별 글자 → 명렬표 행. 정확히 읽히는 쪽은 엄격하게, 아니면 느슨하게. */
+  function pagesToRoster(pageTexts) {
+    var rows = [], ctx = null, lenient = false;
+    pageTexts.forEach(function (tx) {
+      var strict = textToRoster(tx), nonEmpty = String(tx).split(/\r?\n/).filter(function (l) { return l.trim(); }).length;
+      if (strict.length >= 3 && strict.length >= nonEmpty * 0.5) { rows = rows.concat(strict); return; }
+      var r = lenientPage(tx, ctx); ctx = r.ctx; lenient = true; rows = rows.concat(r.rows);
+    });
+    return { rows: rows, lenient: lenient };
+  }
+
   /* ---------- 제목 ---------- */
   function titleInfo(subject, oneLineMax) {
     var len = subject.length; // 과목명 글자 수
@@ -255,7 +305,7 @@
     parseDelimited: parseDelimited, rowsToRoster: rowsToRoster, parseRosterText: parseRosterText,
     stripUnit: stripUnit, classKeys: classKeys, buildClass: buildClass, isExcluded: isExcluded, noteExcluded: noteExcluded,
     newPage: newPage, pageSeed: pageSeed, fillPage: fillPage, buildPages: buildPages,
-    textToRoster: textToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
+    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SeatCore = api;
