@@ -70,7 +70,24 @@
     this.maxId = 0; var self = this;
     headerXml.replace(/<hh:borderFill id="(\d+)"/g, function (m, id) { self.maxId = Math.max(self.maxId, +id); return m; });
     this.added = []; this.cache = {};
+    this.charBase = parseInt((headerXml.match(/<hh:charProperties[^>]*itemCnt="(\d+)"/) || [0, 0])[1], 10);
+    this.charMax = 0; headerXml.replace(/<hh:charPr id="(\d+)"/g, function (m, id) { self.charMax = Math.max(self.charMax, +id); return m; });
+    this.chars = []; this.charCache = {};
   }
+  /* 글자 서식 ref 에서 자간만 바꾼 서식의 id (같으면 ref 그대로). 기존 서식은 두고 새 서식만 뒤에 추가한다. */
+  FillBank.prototype.spacing = function (ref, sp) {
+    var m = this.xml.match(new RegExp('<hh:charPr id="' + ref + '"[\\s\\S]*?</hh:charPr>'));
+    if (!m) return ref;
+    var cur = +(m[0].match(/<hh:spacing hangul="(-?\d+)"/) || [0, 0])[1];
+    if (cur === sp) return ref;
+    var key = ref + '|' + sp;
+    if (this.charCache[key]) return this.charCache[key];
+    var id = ++this.charMax;
+    var c = m[0].replace('id="' + ref + '"', 'id="' + id + '"').replace(/<hh:spacing [^>]*\/>/, '<hh:spacing hangul="' + sp + '" latin="' + sp + '" hanja="' + sp + '" japanese="' + sp + '" other="' + sp + '" symbol="' + sp + '" user="' + sp + '"/>');
+    this.chars.push(c); this.charCache[key] = String(id);
+    return String(id);
+  };
+  FillBank.prototype.dirty = function () { return this.added.length > 0 || this.chars.length > 0; };
   FillBank.prototype.find = function (ref) {
     var m = this.xml.match(new RegExp('<hh:borderFill id="' + ref + '"[^>]*>[\\s\\S]*?</hh:borderFill>'));
     return m ? m[0] : null;
@@ -96,10 +113,18 @@
     return String(id);
   };
   FillBank.prototype.finish = function () {
-    if (!this.added.length) return this.xml;
-    var last = this.xml.lastIndexOf('</hh:borderFill>') + '</hh:borderFill>'.length;
-    var out = this.xml.slice(0, last) + this.added.join('') + this.xml.slice(last);
-    return out.replace(/(<hh:borderFills[^>]*itemCnt=")\d+(")/, '$1' + (this.base + this.added.length) + '$2');
+    var out = this.xml;
+    if (this.added.length) {
+      var last = out.lastIndexOf('</hh:borderFill>') + '</hh:borderFill>'.length;
+      out = out.slice(0, last) + this.added.join('') + out.slice(last);
+      out = out.replace(/(<hh:borderFills[^>]*itemCnt=")\d+(")/, '$1' + (this.base + this.added.length) + '$2');
+    }
+    if (this.chars.length) {
+      var lc = out.lastIndexOf('</hh:charPr>') + '</hh:charPr>'.length;
+      out = out.slice(0, lc) + this.chars.join('') + out.slice(lc);
+      out = out.replace(/(<hh:charProperties[^>]*itemCnt=")\d+(")/, '$1' + (this.charBase + this.chars.length) + '$2');
+    }
+    return out;
   };
 
   /* 좌석표 채우기·꾸미기.
@@ -163,6 +188,7 @@
   async function buildHwpx(deps, templateBytes, layout, pages, opts) {
     opts = opts || {};
     var oneMax = opts.titleOneLineMaxChars == null ? 4 : opts.titleOneLineMaxChars;
+    var tInfo = opts.titleInfo || function (subj) { return { twoLine: subj.length > oneMax, spacing: -25 }; };
     var zip = await deps.JSZip.loadAsync(templateBytes);
     var names = Object.keys(zip.files).filter(function (n) { return !zip.files[n].dir; });
     var xml = await zip.file('Contents/section0.xml').async('string');
@@ -175,8 +201,12 @@
     while (sec.firstChild) sec.removeChild(sec.firstChild);
     sec.appendChild(B.head);
 
+    function applySpacing(para, sp, runIdx) {     // 과목명 글자(run)의 자간을 정한 값으로
+      var r = kids(para, 'run')[runIdx || 0];
+      if (r && sp != null) r.setAttribute('charPrIDRef', bank.spacing(r.getAttribute('charPrIDRef'), sp));
+    }
     pages.forEach(function (pg, pi) {
-      var twoLine = pg.subject.length > oneMax;
+      var ti = tInfo(pg.subject, oneMax), twoLine = ti.twoLine;
       var src, first = pi === 0;
       if (first && !twoLine) src = B.firstOne;
       else src = twoLine ? B.laterTwo : B.laterOne;
@@ -189,11 +219,13 @@
         var off = first ? 0 : 1;
         titleParas = [block[off], block[off + 1]];
         setText(titleParas[1], '(' + pg.subject + ')');
+        applySpacing(titleParas[1], ti.spacing);
         seatPara = block[off + 2];
       } else {
         var off1 = first ? 0 : 1;
         var runs = kids(block[off1], 'run');
         setRunText(runs[1], '(' + pg.subject + ')');
+        applySpacing(block[off1], ti.spacing, 1);
         seatPara = block[off1 + 1];
       }
       fillSeats(seatPara, layout, pg.cells, bank);
@@ -221,7 +253,7 @@
       if (n === 'mimetype') continue;
       var opt = { compression: 'DEFLATE', createFolders: false };
       if (n === 'Contents/section0.xml') nz.file(n, out, opt);
-      else if (n === 'Contents/header.xml' && bank.added.length) nz.file(n, bank.finish(), opt);
+      else if (n === 'Contents/header.xml' && bank.dirty()) nz.file(n, bank.finish(), opt);
       else if (n === 'Preview/PrvText.txt') nz.file(n, previewText(pages, layout, oneMax), opt);
       else if (n === 'Preview/PrvImage.png') nz.file(n, opts.previewPng, opt);
       else if (n === 'settings.xml') {

@@ -147,6 +147,22 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
     // 두 줄 제목: 과목명 5자 이상 쪽은 제목 1행이 따로 있어야 한다
     assert.ok(/<hp:t>\(코딩과 알고리즘\)<\/hp:t>/.test(sec)); ok(v + ': 두 줄 제목 채움');
   }
+  // 과목명 자간: 기본 -6, 길면 -25 까지 (글자 서식은 뒤에 추가만)
+  for (const v of ['A', 'B']) {
+    const L = layouts[v], tpl = fs.readFileSync(path.join(root, 'templates', `seat-template-${v}.hwpx`));
+    const cells = Array.from({ length: L.seatCount }, (_, i) => ({ no: i + 1, name: 'n' + (i + 1) }));
+    const subs = ['철학', '환경과 지속가능한 미래', '기후변화와 지속가능한 세계'];
+    const o = await hw.buildHwpx({ JSZip, DOMParser, XMLSerializer }, tpl, L, subs.map(subject => ({ subject, cells })), { previewPng: PNG, titleInfo: core.titleInfo });
+    const zz = await JSZip.loadAsync(o), sx = await zz.file('Contents/section0.xml').async('string'), hx = await zz.file('Contents/header.xml').async('string');
+    const hT = await JSZip.loadAsync(tpl).then(t => t.file('Contents/header.xml').async('string'));
+    const spOf = (id) => +hx.match(new RegExp('<hh:charPr id="' + id + '"[\\s\\S]*?<hh:spacing hangul="(-?\\d+)"'))[1];
+    const used = subs.map(sub => { const m = sx.match(new RegExp('<hp:run charPrIDRef="(\\d+)"><hp:t>\\(' + sub + '\\)</hp:t>')); return spOf(m[1]); });
+    assert.deepEqual(used, [-6, -15, -25]);
+    const cnt = +hx.match(/<hh:charProperties[^>]*itemCnt="(\d+)"/)[1], n = (hx.match(/<hh:charPr id=/g) || []).length;
+    assert.equal(cnt, n); assert.equal(cnt, +hT.match(/<hh:charProperties[^>]*itemCnt="(\d+)"/)[1] + 2);
+    ok(v + ': 과목명 자간 -6 / -15 / -25 자동 선택, 글자 서식 추가만');
+  }
+
   // 직접 만드는 배치도: X·빈칸·좌석을 마음대로, 모든 쪽이 같은 배치
   for (const cols of [4, 5]) {
     const L0 = layouts[cols === 4 ? 'A' : 'B'];

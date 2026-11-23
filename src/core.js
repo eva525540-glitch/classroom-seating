@@ -585,9 +585,19 @@
   }
 
   /* ---------- 제목 ---------- */
+  /* 과목명 자간: 기본 -6, 길면 -10·-15·-20·-25 로 좁혀 줄바꿈 없이 들어가는 첫 값을 고른다.
+   * 한 줄형(제목 옆에 과목명)은 4글자 이하일 때만, 안 들어가면 두 줄형(과목명만 한 줄). 글자 폭은 양식 글꼴(50pt)·줄 너비로 어림한다. */
+  var SPACINGS = [-6, -10, -15, -20, -25], LINE_W = 53856 * 0.93, TITLE_EM = 5000;
+  function charW(ch, sp) {
+    var e = /\s/.test(ch) ? 0.5 : /[()\[\]\/·.,:~\-]/.test(ch) ? 0.5 : /[A-Z]/.test(ch) ? 0.7 : /[a-z0-9]/.test(ch) ? 0.55 : 1;
+    return TITLE_EM * (e + sp / 100);
+  }
+  function textW(t, sp) { var w = 0; for (var i = 0; i < t.length; i++) w += charW(t[i], sp); return w; }
   function titleInfo(subject, oneLineMax) {
-    var len = subject.length; // 과목명 글자 수
-    return { twoLine: len > oneLineMax, tooLong: len > 12, text: '(' + subject + ')' };
+    var text = '(' + subject + ')', fixed = textW('고사좌석배치표', -6), i;
+    if (subject.length <= oneLineMax) for (i = 0; i < SPACINGS.length; i++) if (fixed + textW(text, SPACINGS[i]) <= LINE_W) return { twoLine: false, tooLong: false, text: text, spacing: SPACINGS[i] };
+    for (i = 0; i < SPACINGS.length; i++) if (textW(text, SPACINGS[i]) <= LINE_W) return { twoLine: true, tooLong: false, text: text, spacing: SPACINGS[i] };
+    return { twoLine: true, tooLong: true, text: text, spacing: SPACINGS[SPACINGS.length - 1] };
   }
 
   var api = {

@@ -409,7 +409,7 @@
   function warningsFor(pg) {
     var w = [];
     if (pg.overflow.length) w.push('좌석(' + seatCount() + '개)이 모자라 앉히지 못한 학생: ' + pg.overflow.map(function (n) { return n + ' ' + S.cls.students[n].name; }).join(', '));
-    if (C.titleInfo(pg.subject, ONE_MAX).tooLong) w.push('과목명이 12자를 넘어 제목 2행에 다 들어가지 않을 수 있습니다. 한글에서 글자 크기를 줄여 주세요.');
+    if (C.titleInfo(pg.subject, ONE_MAX).tooLong) w.push('과목명이 자간 -25로도 한 줄에 다 들어가지 않을 수 있습니다. 한글에서 글자 크기를 줄여 주세요.');
     return w;
   }
   function renderDims() {
@@ -629,7 +629,7 @@
     drawPreview(sel[0]).then(function (png) {
       return H.buildHwpx({ JSZip: window.JSZip, DOMParser: window.DOMParser, XMLSerializer: window.XMLSerializer },
         b64ToBytes(D.templates[layoutId()]), C.toTemplateLayout(curLayout(), tplCols()),
-        sel.map(function (p) { return { subject: p.subject, cells: cellsOf(p) }; }), { previewPng: png, titleOneLineMaxChars: ONE_MAX });
+        sel.map(function (p) { return { subject: p.subject, cells: cellsOf(p) }; }), { previewPng: png, titleOneLineMaxChars: ONE_MAX, titleInfo: C.titleInfo });
     }).then(function (bytes) {
       var g = (S.cls.grade.match(/\d+/) || [''])[0], c = (S.cls.cls.match(/\d+/) || [''])[0];
       var name = (g && c ? g + '-' + c + '_' : '') + '고사좌석배치표.hwpx';
