@@ -169,6 +169,8 @@ button.done{background:#1f9d62;border-color:#1f9d62}
 .expinfo.bad{color:var(--warn)}
 .hv{display:none;position:absolute;right:4px;top:4px;gap:3px;z-index:2}
 .seat:hover .hv,.vcell:hover .hv,.xcell:hover .hv{display:flex}
+.hv button.bl{border-radius:999px;padding:0 8px;font-size:.68rem}
+.ico{font-size:1rem;line-height:1;padding:3px 10px}.ico:disabled{opacity:.35;cursor:default}
 .hv button{padding:0;min-width:20px;height:20px;line-height:18px;font-size:.72rem;border-radius:50%;background:rgba(10,37,64,.10);color:rgba(10,37,64,.55);border:0;box-shadow:none}
 .hv button:hover{background:rgba(10,37,64,.28);color:var(--ink)}
 .xcell .hv button,.vcell .hv button{font-size:.8rem}
@@ -291,8 +293,8 @@ details[open]>summary::before{content:"▾"}
           <button class="sub mini hidden" id="btnUnmerge" style="margin-top:8px">합치기 해제</button>
         </div>
         <div class="panel">
-          <div class="clrrow"><button class="sub mini" id="btnClear">직접 배치하기</button><button class="sub mini hidden" id="btnUndoClear">되돌리기</button>
-          <span class="q" tabindex="0" data-tip="이 쪽의 학생을 모두 배치 대기로 보내요.&#10;그 뒤 학생을 끌어 원하는 좌석에 놓으세요.">?</span></div>
+          <div class="clrrow"><button class="sub mini" id="btnClear">직접 배치하기</button><button class="sub mini ico" id="btnUndoClear" title="되돌리기" aria-label="되돌리기" disabled>↺</button>
+          <span class="q" tabindex="0" data-tip="이 쪽의 학생을 모두 배치 대기로 보내요.&#10;그 뒤 학생을 끌어 원하는 좌석에 놓으세요.&#10;↺ 는 좌석을 바꾸기 직전으로 되돌려요.">?</span></div>
         </div>
         <div class="panel hidden" id="poolPanel">
           <h3>배치 대기 <span class="q" tabindex="0" data-tip="학생을 좌석으로 끌어 놓아요.&#10;좌석을 여기로 끌면 자리가 비워져요.">?</span></h3>
@@ -327,9 +329,9 @@ details[open]>summary::before{content:"▾"}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="src/data.js?v=mwtb72o1"></script>
-<script src="src/core.js?v=mwtb72o1"></script>
-<script src="src/hwpx.js?v=mwtb72o1"></script>
-<script src="src/app.js?v=mwtb72o1"></script>
+<script src="src/data.js?v=mwtbl14b"></script>
+<script src="src/core.js?v=mwtbl14b"></script>
+<script src="src/hwpx.js?v=mwtbl14b"></script>
+<script src="src/app.js?v=mwtbl14b"></script>
 </body>
 </html>

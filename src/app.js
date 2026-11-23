@@ -19,7 +19,7 @@
     subjectsBy: {}, mergesBy: {}, mergeOpen: false, mergeIds: [], openSub: -1,                                    // 학급별 선택과목(추가한 순서) 목록
     classKey: null, cls: null,
     mode: 'A',                                                      // 'A' 4열 | 'B' 5열 | 'manual' 직접 조정
-    types: { A: C.defaultTypes(4), B: C.defaultTypes(5), M: C.defaultTypes(4, 6) }, mcols: 4, mrows: 6,
+    types: { A: C.defaultTypes(4), B: C.defaultTypes(5), M: C.defaultTypes(4, 6) }, mcols: 4, mrows: 6, undo: [],
     seed: 1, keywords: C.DEFAULT_KEYWORDS.slice(),
     manual: {}, pages: [], cur: 0, sel: -1, selPool: null, thumbs: false
   };
@@ -37,7 +37,12 @@
   function ctx() {
     return { seatCount: seatCount(), manual: S.mode === 'manual', excluded: function (no) { return C.isExcluded(S.cls.students[no], S.keywords, S.manual); } };
   }
-  function push() { /* 되돌리기 기능은 없다 */ }
+  /* 되돌리기: 현재 쪽의 좌석 상태를 직전으로 (좌석을 바꾸는 조작 직전에 저장, 배치도 크기·X가 바뀌면 비운다) */
+  function push() {
+    var pg = S.pages[S.cur]; if (!pg) return;
+    S.undo.push({ page: pg, seats: pg.seats.slice(), locked: pg.locked.slice(), overflow: pg.overflow.slice(), cleared: !!pg.cleared });
+    if (S.undo.length > 50) S.undo.shift();
+  }
   function isPicked(pg, no) { return !pg.common && !!pg.pick && pg.pick.indexOf(no) >= 0; }
   /* 색: 첫째 과목 옅은 주황, 둘째 옅은 초록, 셋째부터 비슷한 명도의 다른 색 (합본에서 과목 순서 = 쪽 오른쪽의 합친 순서) */
   var PAL = ['#FFE6D8', '#D5EBE2', '#D8E6FA', '#E8DEF4', '#F4ECD2', '#F8DEE8', '#DDEFD0', '#D6EEF2'];
@@ -293,17 +298,24 @@
         '<button class="sub mini mv" data-mo="' + k + '" data-d="1"' + (k === m.ids.length - 1 ? ' disabled' : '') + ' aria-label="아래로">▼</button></div>';
     }).join('');
   }
-  function clearSeats() {          // 현재 쪽의 모든 학생을 배치 대기로 (되돌리기 가능)
-    var pg = cur();
-    S.undo = { page: pg, seats: pg.seats.slice(), locked: pg.locked.slice(), overflow: pg.overflow.slice() };
+  function clearSeats() {          // 현재 쪽의 모든 학생을 배치 대기로
+    var pg = cur(); push();
     pg.seats = new Array(pg.seats.length).fill(null); pg.locked = []; pg.overflow = []; pg.cleared = true;
     S.sel = -1; S.selPool = null; render();
   }
   function undoClear() {
-    var u = S.undo; if (!u) return;
-    var i = S.pages.indexOf(u.page);
-    if (i >= 0 && u.seats.length === u.page.seats.length) { u.page.seats = u.seats; u.page.locked = u.locked; u.page.overflow = u.overflow; u.page.cleared = false; S.cur = i; }
-    S.undo = null; S.sel = -1; S.selPool = null; render();
+    while (S.undo.length) {
+      var u = S.undo.pop(), i = S.pages.indexOf(u.page);
+      if (i < 0 || u.seats.length !== u.page.seats.length) continue;
+      u.page.seats = u.seats; u.page.locked = u.locked; u.page.overflow = u.overflow; u.page.cleared = u.cleared;
+      S.cur = i; S.sel = -1; S.selPool = null; render(); return;
+    }
+  }
+  function blankSeat(slot) {       // 그 좌석을 빈자리로 (학생은 배치 대기로, 좌석은 그대로 남아 언제든 학생을 옮길 수 있다)
+    var pg = cur(), no = pg.seats[slot]; if (no == null) return;
+    push(); pg.seats[slot] = null;
+    var l = pg.locked.indexOf(no); if (l >= 0) pg.locked.splice(l, 1);
+    S.sel = -1; render();
   }
   function removeMerge(j) {
     syncSubs();
@@ -378,7 +390,7 @@
   function slotMap(L) { var m = {}; L.slotOrder.forEach(function (s, i) { m[s.row + ',' + s.col] = i; }); return m; }
   function hv(r, c, kinds, on) {
     if (!on) return '';
-    return '<span class="hv">' + kinds.map(function (k) { return '<button data-cell="' + k[0] + '" data-r="' + r + '" data-c="' + c + '"' + (k[0] === 'seat' ? ' title="좌석으로 되돌리기" aria-label="좌석으로 되돌리기"' : ' title="이 칸 제외(X)" aria-label="이 칸 제외(X)"') + '>' + k[1] + '</button>'; }).join('') + '</span>';
+    return '<span class="hv">' + kinds.map(function (k) { return '<button data-cell="' + k[0] + '" data-r="' + r + '" data-c="' + c + '"' + (k[0] === 'seat' ? ' title="좌석으로 되돌리기" aria-label="좌석으로 되돌리기"' : k[0] === 'blank' ? ' class="bl" title="빈자리로 (좌석은 남김)" aria-label="빈자리로"' : ' title="이 칸 제외(X)" aria-label="이 칸 제외(X)"') + '>' + k[1] + '</button>'; }).join('') + '</span>';
   }
   function seatsHtml(pg, opt) {
     var L = curLayout(), sm = slotMap(L), ci = [];
@@ -394,7 +406,7 @@
           var locked = no != null && pg.locked.indexOf(no) >= 0;
           var cls = 'seat' + (no == null && !blocked ? ' empty' : '') + (locked ? ' locked' : '') + (blocked ? ' blocked' : '') + (no != null && isPicked(pg, no) ? ' picked' : '') + (opt.sel === i ? ' sel' : '');
           var bg = no != null && isPicked(pg, no) ? ' style="background:' + colorOf(pg, no) + '"' : '';
-          var inner = '<span class="slot">' + (i + 1) + '</span>' + hv(r, dc, [['x', 'X']], opt.interactive);
+          var inner = '<span class="slot">' + (i + 1) + '</span>' + hv(r, dc, no != null ? [['blank', '빈칸'], ['x', 'X']] : [['x', 'X']], opt.interactive);
           if (blocked) inner += '<span class="nm">비움</span>';
           else if (no != null) inner += '<span class="no">' + no + '</span><span class="nm">' + esc(S.cls.students[no].name) + '</span>' + (locked ? '<span class="tag">●</span>' : '');
           html += '<div class="' + cls + '" data-slot="' + i + '"' + bg + (opt.interactive && !blocked && no != null ? ' draggable="true"' : '') + '>' + inner + '</div>';
@@ -427,9 +439,8 @@
   }
   function setMode(m) {
     if (m === S.mode) return;
-    if (S.cls) push();
     S.mode = m;
-    if (S.cls) { syncSubs(); S.cls.subjects = subList(S.classKey); S.undo = null; S.pages = newPages(); S.cur = 0; S.sel = -1; S.selPool = null; }
+    if (S.cls) { syncSubs(); S.cls.subjects = subList(S.classKey); S.undo = []; S.pages = newPages(); S.cur = 0; S.sel = -1; S.selPool = null; }
     render();
   }
 
@@ -504,7 +515,7 @@
     }
     $('selbar').innerHTML = bar;
     $('namePanel').classList.toggle('hidden', pg.common); $('btnUnmerge').classList.toggle('hidden', !pg.mid); $('pgName').value = pg.subject; renderMergeOrder();
-    $('btnUndoClear').classList.toggle('hidden', !(S.undo && S.undo.page === pg));
+    $('btnUndoClear').disabled = !S.undo.length;
     var pool = unseated(pg);
     $('poolPanel').classList.toggle('hidden', !pool.length);
     $('pool').innerHTML = pool.map(function (n) { return '<span class="chip' + (S.selPool === n ? ' sel' : '') + (isPicked(pg, n) ? ' picked' : '') + '"' + (isPicked(pg, n) ? ' style="background:' + colorOf(pg, n) + '"' : '') + ' draggable="true" data-pool="' + n + '"><i>' + n + '</i>' + esc(S.cls.students[n].name) + '</span>'; }).join('');
@@ -550,7 +561,6 @@
     render();
   }
   function setExcluded(no, excluded) {
-    push();
     S.manual[no] = excluded;
     var auto = S.cls.students[no].notes.some(function (n) { return C.noteExcluded(n, S.keywords); });
     if (auto === excluded) delete S.manual[no];
@@ -559,7 +569,6 @@
   }
   function togglePick(no) {
     var pg = cur(); if (pg.common || pg.mid) return;
-    push();
     var i = pg.pick.indexOf(no);
     if (i >= 0) pg.pick.splice(i, 1); else pg.pick.push(no);
     render();
@@ -588,18 +597,6 @@
     push();
     S.types.M = C.resizeTypes(S.types.M, K, R); S.mcols = K; S.mrows = R;
     relayoutPages(old, od);
-    if (S.mode === 'manual') {         // 새로 생긴 빈 좌석에는 대기 중인 학생을 순서대로 채운다 (배치 대기로 비워 둔 쪽은 그대로)
-      S.cls.subjects = subList(S.classKey);
-      var fresh = newPages();
-      S.pages.forEach(function (pg, i) {
-        if (pg.cleared || !fresh[i]) return;
-        var order = fresh[i].seats.filter(function (x) { return x != null; }).concat(fresh[i].overflow);
-        order.forEach(function (no) {
-          if (pg.seats.indexOf(no) >= 0 || ctx().excluded(no)) return;
-          var k = pg.seats.indexOf(null); if (k >= 0) pg.seats[k] = no;
-        });
-      });
-    }
     render();
   }
   function relayoutPages(old, od) {
@@ -607,7 +604,21 @@
     if (S.mode === 'manual') {            // 직접 조정: 학생은 자기 칸에 그대로, 없어진 칸의 학생만 대기로
       var nd = { R: curRows(), K: curCols() }, idx = {};
       nl.slotOrder.forEach(function (s, i) { idx[(s.row + 8 - nd.R) + ',' + (s.col / 2 + 8 - nd.K)] = i; });   // 오른쪽 아래를 기준 좌표로
-      S.pages.forEach(function (pg) {
+      S.cls.subjects = subList(S.classKey);
+      var fresh = newPages();
+      S.pages.forEach(function (pg, pi) {
+        var last = -1, hole = false;
+        pg.seats.forEach(function (x, i) { if (x != null) last = i; });
+        pg.seats.forEach(function (x, i) { if (x == null && i < last) hole = true; });
+        if (!pg.cleared && !hole && fresh[pi]) {      // 빈 자리 없이 앞부터 채워진 쪽: 앉은 순서를 지키며 앞(1번)부터 다시 채운다
+          var seq = pg.seats.filter(function (x) { return x != null; });
+          fresh[pi].seats.concat(fresh[pi].overflow).forEach(function (no) { if (no != null && seq.indexOf(no) < 0 && !ctx().excluded(no)) seq.push(no); });
+          var st = new Array(N).fill(null), q = 0;
+          for (var k = 0; k < N && q < seq.length; k++) st[k] = seq[q++];
+          pg.seats = st; pg.blocked = []; pg.overflow = seq.slice(q);
+          pg.locked = pg.locked.filter(function (no) { return st.indexOf(no) >= 0; });
+          return;
+        }
         var seats = new Array(N).fill(null);
         pg.seats.forEach(function (no, i) {
           var o = old.slotOrder[i], k = o ? (o.row + 8 - od.R) + ',' + (o.col / 2 + 8 - od.K) : null;
@@ -625,7 +636,7 @@
         pg.locked = pg.locked.filter(function (no) { return seats.indexOf(no) >= 0; });
       });
     }
-    S.sel = -1; S.selPool = null;
+    S.sel = -1; S.selPool = null; S.undo = [];
   }
 
   /* ---------- 내보내기 ---------- */
@@ -778,6 +789,7 @@
     var paper = $('paper');
     paper.onclick = function (e) {
       var hb = e.target.closest('[data-cell]');
+      if (hb && hb.dataset.cell === 'blank') { var bs = slotMap(curLayout())[hb.dataset.r + ',' + hb.dataset.c * 2]; if (bs != null) blankSeat(bs); return; }
       if (hb) { setCell(+hb.dataset.r, +hb.dataset.c, hb.dataset.cell); return; }
       var i = seatOf(e); if (i < 0) return;
       var pg = cur();
