@@ -367,33 +367,35 @@
   }
 
   /* ---------- 작업 저장 / 불러오기 (엑셀) ----------
-   * 시트: 학생명렬표 · 선택과목(순서·과목명·선택 번호) · 합친쪽 · 배치(방식·열·행·X 칸) · 안내 */
-  function xList(types) { var o = []; types.forEach(function (row, r) { row.forEach(function (t, c) { if (t === 'x') o.push((r + 1) + '-' + (c + 1)); }); }); return o.join(', '); }
+   * 시트 2개: 학생명렬표 · 선택과목(학생 × 과목 표, 선택한 칸에 ●). 합친 쪽·배치 방식은 저장하지 않는다. */
   function saveWork() {
     if (!S.master || !S.cls) { msg('subMsg', '먼저 학생 명렬표를 적용하세요.'); return; }
     if (typeof XLSX === 'undefined') { msg('subMsg', '엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.'); return; }
     msg('subMsg', ''); syncSubs();
-    var wb = XLSX.utils.book_new(), keys = C.masterClassKeys(S.master), save = S.classKey, sub = [['학년', '반', '순서', '과목명', '선택 번호', '선택 학생(참고)']], mg = [['학년', '반', '순서', '쪽 이름(비우면 자동)', '합친 과목(순서대로, / 로 구분)']];
+    var wb = XLSX.utils.book_new(), keys = C.masterClassKeys(S.master), save = S.classKey;
     var num = function (t, u) { return String(t).replace(u, ''); };
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['학년', '반', '번호', '이름', '구분']].concat(S.master.map(function (m) { return [num(m.grade, '학년'), num(m.cls, '반'), m.no, m.name, m.kind || '']; }))), '학생명렬표');
+    var names = [], sel = {};                       // 과목 열 순서 = 추가한 순서 (학급이 여럿이면 처음 나온 순서대로 이어 붙인다)
     keys.forEach(function (k) {
-      var nm = {}; S.master.forEach(function (m) { if (m.grade + '|' + m.cls === k.key) nm[m.no] = m.name; });
       S.classKey = k.key;
-      subs().forEach(function (x, i) {
-        var nos = x.nos.slice().sort(function (a, b) { return a - b; });
-        sub.push([num(k.grade, '학년'), num(k.cls, '반'), i + 1, x.name, nos.join(', '), nos.map(function (n) { return nm[n] || ''; }).join(', ')]);
+      subs().forEach(function (x) {
+        if (names.indexOf(x.name) < 0) names.push(x.name);
+        x.nos.forEach(function (n) { sel[k.key + '|' + n + '|' + x.name] = 1; });
       });
-      merges().forEach(function (m, j) { mg.push([num(k.grade, '학년'), num(k.cls, '반'), j + 1, m.name || '', m.ids.map(function (id) { var x = subById(id); return x ? x.name : ''; }).join(' / ')]); });
     });
+    var rows = [['학년', '반', '번호', '이름', '구분'].concat(names)], cnt = names.map(function () { return 0; });
+    S.master.forEach(function (m) {
+      var r = [num(m.grade, '학년'), num(m.cls, '반'), m.no, m.name, m.kind || ''];
+      names.forEach(function (nm, i) { var on = sel[m.grade + '|' + m.cls + '|' + m.no + '|' + nm]; r.push(on ? '●' : ''); if (on) cnt[i]++; });
+      rows.push(r);
+    });
+    rows.push(['', '', '', '선택 인원', ''].concat(cnt.map(function (n) { return n + '명'; })));
     S.classKey = save;
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sub), '선택과목');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mg), '합친쪽');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['항목', '값'],
-      ['배치 방식', S.mode === 'A' ? 'A형(4열)' : S.mode === 'B' ? 'B형(5열)' : '직접 조정'], ['직접 조정 열', S.mcols], ['직접 조정 행', S.mrows],
-      ['현재 학급', save], ['A형 X 칸(행-열)', xList(S.types.A)], ['B형 X 칸(행-열)', xList(S.types.B)], ['직접 조정 X 칸(행-열)', xList(S.types.M)]]), '배치');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['고사 좌석배치표 작업 저장 파일'], ['학생명렬표: 학년·반·번호·이름·구분 (01에 그대로 올릴 수 있어요)'], ['선택과목: 위에서부터 추가한 순서. 선택 번호는 쉼표로 구분'], ['합친쪽: 같이 시험 보는 과목을 합친 순서대로'], ['배치: 열·행과 X 칸은 위에서 왼쪽 기준 1부터 센 위치(행-열)'], ['좌석 자리 자체는 저장하지 않고, 불러오면 규칙(선택 과목 먼저, 번호순)으로 다시 배치돼요']]), '안내');
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 12 }, { wch: 12 }].concat(names.map(function (n) { return { wch: Math.max(8, n.length * 2 + 2) }; }));
+    XLSX.utils.book_append_sheet(wb, ws, '선택과목');
     var f = S.cls.grade.replace('학년', ''), c = S.cls.cls.replace('반', '');
-    var name = '좌석배치_작업저장' + (f && c ? '_' + f + '-' + c : '') + '.xlsx';
+    var name = '좌석배치_학생_선택과목' + (keys.length === 1 && f && c ? '_' + f + '-' + c : '') + '.xlsx';
     download(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }), name);
     var ok = $('subOk'); ok.textContent = name + ' 으로 저장했어요'; ok.classList.remove('hidden');
   }
@@ -403,35 +405,31 @@
     var keyOf = function (g, c) { return C.normGrade(g) + '|' + C.normCls(c); };
     var roster = wb.Sheets['학생명렬표'] ? tableToMaster(T('학생명렬표')) : null;
     if (roster && !roster.length) throw new Error('학생명렬표 시트에 학생이 없습니다.');
-    S.subjectsBy = {}; S.mergesBy = {}; S.mergeOpen = false; S.mergeIds = []; S.openSub = -1;
-    var sub = T('선택과목').slice(1).filter(function (r) { return String(r[3]).trim(); }).sort(function (a, b) { return (+a[2] || 0) - (+b[2] || 0); });
-    sub.forEach(function (r) {
-      var k = keyOf(r[0], r[1]); (S.subjectsBy[k] = S.subjectsBy[k] || []).push({ id: 's' + (++nid), name: String(r[3]).trim(), nos: (String(r[4]).match(/\d+/g) || []).map(Number).filter(function (n, i, a) { return a.indexOf(n) === i; }) });
-    });
-    T('합친쪽').slice(1).sort(function (a, b) { return (+a[2] || 0) - (+b[2] || 0); }).forEach(function (r) {
-      var k = keyOf(r[0], r[1]), list = S.subjectsBy[k] || [], ids = [];
-      String(r[4]).split('/').forEach(function (nm) { nm = nm.trim(); var x = list.filter(function (q) { return q.name === nm; })[0]; if (x && ids.indexOf(x.id) < 0) ids.push(x.id); });
-      if (ids.length >= 2) (S.mergesBy[k] = S.mergesBy[k] || []).push({ id: 'm' + (++nid), ids: ids, name: String(r[3]).trim() });
-    });
-    var L = {}; T('배치').slice(1).forEach(function (r) { L[String(r[0]).trim()] = String(r[1]).trim(); });
-    var clamp = function (v, d) { v = parseInt(v, 10); return isNaN(v) ? d : Math.max(1, Math.min(8, v)); };
-    S.mcols = clamp(L['직접 조정 열'], 4); S.mrows = clamp(L['직접 조정 행'], 6);
-    var mk = function (txt, cols, rows) {
-      var t = C.defaultTypes(cols, rows);
-      (txt || '').split(',').forEach(function (p) { var m = /(\d+)\s*-\s*(\d+)/.exec(p); if (m && t[+m[1] - 1] && t[+m[1] - 1][+m[2] - 1]) t[+m[1] - 1][+m[2] - 1] = 'x'; });
-      return t;
-    };
-    S.types = { A: mk(L['A형 X 칸(행-열)'], 4), B: mk(L['B형 X 칸(행-열)'], 5), M: mk(L['직접 조정 X 칸(행-열)'], S.mcols, S.mrows) };
-    var md = L['배치 방식'] || ''; S.mode = /B/.test(md) ? 'B' : /직접/.test(md) ? 'manual' : 'A';
-    S.undo = [];
-    if (L['현재 학급']) S.classKey = L['현재 학급'];
+    var tab = T('선택과목'), head = (tab[0] || []).map(function (h) { return String(h).trim(); });
+    var cn = head.indexOf('번호'), nn = head.indexOf('이름');
+    var classes = roster ? C.masterClassKeys(roster).map(function (k) { return k.key; }) : C.masterClassKeys(S.master).map(function (k) { return k.key; });
+    S.subjectsBy = {}; S.mergesBy = {}; S.mergeOpen = false; S.mergeIds = []; S.openSub = -1; S.undo = [];
+    if (cn >= 0) {                                    // 학생 × 과목 표
+      var cols = [];
+      for (var c = Math.max(cn, nn) + 1; c < head.length; c++) if (head[c] && head[c] !== '구분') cols.push(c);
+      classes.forEach(function (k) { S.subjectsBy[k] = cols.map(function (c) { return { id: 's' + (++nid), name: head[c], nos: [] }; }); });
+      tab.slice(1).forEach(function (r) {
+        var no = parseInt(String(r[cn]).trim(), 10); if (isNaN(no)) return;
+        var k = head.indexOf('학년') >= 0 ? keyOf(r[head.indexOf('학년')], r[head.indexOf('반')]) : classes[0], list = S.subjectsBy[k];
+        if (list) cols.forEach(function (c, i) { if (String(r[c]).trim()) list[i].nos.push(no); });
+      });
+    } else {                                          // 이전 형식(과목 한 줄에 번호 나열)도 읽는다
+      tab.slice(1).filter(function (r) { return String(r[3]).trim(); }).sort(function (a, b) { return (+a[2] || 0) - (+b[2] || 0); }).forEach(function (r) {
+        var k = keyOf(r[0], r[1]); (S.subjectsBy[k] = S.subjectsBy[k] || []).push({ id: 's' + (++nid), name: String(r[3]).trim(), nos: (String(r[4]).match(/\d+/g) || []).map(Number) });
+      });
+    }
     if (roster) {
       S.rows = roster.map(function (m) { return { grade: m.grade.replace('학년', ''), cls: m.cls.replace('반', ''), no: m.no, name: m.name, kind: m.kind }; });
       renderMaster();
       if (!applyMaster()) throw new Error('학생 명렬표에 고칠 곳이 있습니다. 01의 안내를 확인하세요.');
     } else startClass(S.classKey);
-    var n = (S.subjectsBy[S.classKey] || []).length, mgn = (S.mergesBy[S.classKey] || []).length;
-    var ok = $('subOk'); ok.textContent = '불러왔어요 · 과목 ' + n + '개' + (mgn ? ' · 합친 쪽 ' + mgn + '개' : ''); ok.classList.remove('hidden');
+    var n = (S.subjectsBy[S.classKey] || []).length;
+    var ok = $('subOk'); ok.textContent = '불러왔어요 · 과목 ' + n + '개'; ok.classList.remove('hidden');
   }
   function loadWorkFile(file) {
     msg('subMsg', ''); $('subOk').classList.add('hidden');
