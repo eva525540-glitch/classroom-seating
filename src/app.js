@@ -27,7 +27,7 @@
     S.pages = o.pages; S.manual = o.manual; S.seed = o.seed; S.layout = o.layout; S.mode = o.mode; S.sel = -1; S.selPool = null;
     if (S.cur >= S.pages.length) S.cur = S.pages.length - 1;
   }
-  function cellsOf(pg) { return pg.seats.map(function (no) { return no == null ? null : { no: no, name: S.cls.students[no].name }; }); }
+  function cellsOf(pg) { return pg.seats.map(function (no) { return no == null ? null : { no: no, name: S.cls.students[no].name, picked: !pg.common && !!pg.pick && pg.pick.indexOf(no) >= 0 }; }); }
   function unseated(pg) {
     var c = ctx();
     return pg.nos.filter(function (no) { return !c.excluded(no) && pg.seats.indexOf(no) < 0; });

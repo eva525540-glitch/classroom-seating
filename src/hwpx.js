@@ -63,7 +63,7 @@
   }
 
   /* 좌석 채우기: cells = [{no,name}|null] (슬롯 순서) */
-  function fillSeats(tblPara, layout, cells) {
+  function fillSeats(tblPara, layout, cells, shade) {
     var tbl = descendants(tblPara, 'tbl')[0];
     var tcs = descendants(tbl, 'tc');
     var byAddr = {};
@@ -79,8 +79,50 @@
       var c = cells[i];
       setText(ps[0], c ? String(c.no) : '');
       setText(ps[1], c ? c.name : '');
+      if (c && c.picked && shade) {
+        var old = tc.getAttribute('borderFillIDRef');
+        if (shade[old]) tc.setAttribute('borderFillIDRef', shade[old]);
+      }
     });
     return tbl;
+  }
+
+  /* 선택 학생 좌석용 배경색: header.xml 은 기존 서식을 그대로 두고 borderFill 만 뒤에 추가한다. */
+  var SHADE_COLOR = '#D9ECFF';
+  function addShadeFills(headerXml, refs) {
+    var bfs = headerXml.match(/<hh:borderFills[^>]*>/);
+    var cnt = parseInt((bfs[0].match(/itemCnt="(\d+)"/) || [0, 0])[1], 10);
+    var maxId = 0;
+    headerXml.replace(/<hh:borderFill id="(\d+)"/g, function (m, id) { maxId = Math.max(maxId, +id); return m; });
+    var map = {}, add = '';
+    refs.forEach(function (ref) {
+      var re = new RegExp('<hh:borderFill id="' + ref + '"[^>]*>[\\s\\S]*?</hh:borderFill>');
+      var m = headerXml.match(re);
+      if (!m) return;
+      var id = ++maxId, s = m[0].replace('id="' + ref + '"', 'id="' + id + '"');
+      var brush = '<hc:fillBrush><hc:winBrush faceColor="' + SHADE_COLOR + '" hatchColor="#999999" alpha="0"/></hc:fillBrush>';
+      if (/<hc:fillBrush>[\s\S]*?<\/hc:fillBrush>/.test(s)) s = s.replace(/<hc:fillBrush>[\s\S]*?<\/hc:fillBrush>/, brush);
+      else s = s.replace('</hh:borderFill>', brush + '</hh:borderFill>');
+      map[ref] = String(id); add += s;
+    });
+    var last = headerXml.lastIndexOf('</hh:borderFill>') + '</hh:borderFill>'.length;
+    var out = headerXml.slice(0, last) + add + headerXml.slice(last);
+    out = out.replace(/(<hh:borderFills[^>]*itemCnt=")\d+(")/, '$1' + (cnt + Object.keys(map).length) + '$2');
+    return { xml: out, map: map };
+  }
+  function seatBorderRefs(paras, layout, pages) {
+    var want = {};
+    pages.forEach(function (pg) { pg.cells.forEach(function (c, i) { if (c && c.picked) want[layout.slotOrder[i].col + ',' + layout.slotOrder[i].row] = 1; }); });
+    var refs = {};
+    paras.forEach(function (p) {
+      var tbl = descendants(p, 'tbl')[0];
+      if (!tbl || tbl.getAttribute('rowCnt') === '1') return;
+      descendants(tbl, 'tc').forEach(function (tc) {
+        var a = kids(tc, 'cellAddr')[0], key = a.getAttribute('colAddr') + ',' + a.getAttribute('rowAddr');
+        if (want[key]) refs[tc.getAttribute('borderFillIDRef')] = 1;
+      });
+    });
+    return Object.keys(refs);
   }
 
   function previewText(pages, layout, twoLineMax) {
@@ -119,6 +161,11 @@
     var sec = doc.documentElement;
     var paras = kids(sec, 'p');
     var B = splitBlocks(paras);
+    var headerXml = await zip.file('Contents/header.xml').async('string'), shade = null;
+    if (pages.some(function (pg) { return pg.cells.some(function (c) { return c && c.picked; }); })) {
+      var sh = addShadeFills(headerXml, seatBorderRefs(paras, layout, pages));
+      headerXml = sh.xml; shade = sh.map;
+    }
 
     while (sec.firstChild) sec.removeChild(sec.firstChild);
     sec.appendChild(B.head);
@@ -144,7 +191,7 @@
         setRunText(runs[1], '(' + pg.subject + ')');
         seatPara = block[off1 + 1];
       }
-      fillSeats(seatPara, layout, pg.cells);
+      fillSeats(seatPara, layout, pg.cells, shade);
       if (delta) block.forEach(function (p) { shiftVpos(p, delta); });
       block.forEach(function (p) { sec.appendChild(p); });
     });
@@ -169,6 +216,7 @@
       if (n === 'mimetype') continue;
       var opt = { compression: 'DEFLATE', createFolders: false };
       if (n === 'Contents/section0.xml') nz.file(n, out, opt);
+      else if (n === 'Contents/header.xml' && shade) nz.file(n, headerXml, opt);
       else if (n === 'Preview/PrvText.txt') nz.file(n, previewText(pages, layout, oneMax), opt);
       else if (n === 'Preview/PrvImage.png') nz.file(n, opts.previewPng, opt);
       else if (n === 'settings.xml') {

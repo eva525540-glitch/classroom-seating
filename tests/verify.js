@@ -49,7 +49,7 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
   for (const v of ['A', 'B']) {
     const L = layouts[v];
     const tpl = fs.readFileSync(path.join(root, 'templates', `seat-template-${v}.hwpx`));
-    const outPages = pages.map(p => ({ subject: p.subject, cells: p.seats.map(no => no == null ? null : { no, name: cls.students[no].name }) }));
+    const outPages = pages.map(p => ({ subject: p.subject, cells: p.seats.map(no => no == null ? null : { no, name: cls.students[no].name, picked: !p.common && p.pick.includes(no) }) }));
     const out = await hw.buildHwpx({ JSZip, DOMParser, XMLSerializer }, tpl, L, outPages, { previewPng: PNG });
     const z = await JSZip.loadAsync(out);
     const names = Object.keys(z.files);
@@ -64,7 +64,19 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
     assert.equal(new Set(ids.map(m => m[1])).size, 26); assert.equal(new Set(ids.map(m => m[2])).size, 26);
     assert.equal((sec.match(/pageBreak="1"/g) || []).length, 12); ok(v + ': 표 26개·id 유일·쪽나눔 12');
     const hdrT = await JSZip.loadAsync(tpl).then(t => t.file('Contents/header.xml').async('string'));
-    assert.equal(await z.file('Contents/header.xml').async('string'), hdrT); ok(v + ': header.xml 불변');
+    const hdrN = await z.file('Contents/header.xml').async('string');
+    const BASE = +hdrT.match(/<hh:borderFills[^>]*itemCnt="(\d+)"/)[1];
+    const addedIds = [...hdrN.matchAll(/<hh:borderFill id="(\d+)"/g)].map(m => +m[1]).filter(id => id > BASE);
+    assert.ok(addedIds.length > 0 && new Set(addedIds).size === addedIds.length);
+    assert.equal(+hdrN.match(/<hh:borderFills[^>]*itemCnt="(\d+)"/)[1], BASE + addedIds.length);
+    assert.equal((hdrN.match(/faceColor="#D9ECFF"/g) || []).length, addedIds.length);
+    // 기존 서식은 그대로: 추가분을 빼고 itemCnt 를 되돌리면 원본과 같다
+    let back = hdrN.replace(/<hh:borderFill id="(\d+)"[^>]*>[\s\S]*?<\/hh:borderFill>/g, (m, id) => +id > BASE ? '' : m);
+    back = back.replace('<hh:borderFills itemCnt="' + (BASE + addedIds.length) + '"', '<hh:borderFills itemCnt="' + BASE + '"');
+    assert.equal(back, hdrT);
+    const used = new Set([...sec.matchAll(/<hp:tc [^>]*borderFillIDRef="(\d+)"/g)].map(m => +m[1]));
+    addedIds.forEach(id => assert.ok(used.has(id), '추가 서식 미사용: ' + id));
+    [...used].forEach(id => assert.ok(id <= BASE + addedIds.length)); ok(v + ': header.xml 은 서식 추가만, 선택 학생 셀에 적용');
     // 이름 누출 검사: 텍스트 파일 전체에서 명렬표 이름만 허용, 양식 이름 없음
     const tplZip = await JSZip.loadAsync(tpl);
     const tplText = (await tplZip.file('Preview/PrvText.txt').async('string')) + (await tplZip.file('Contents/section0.xml').async('string'));
