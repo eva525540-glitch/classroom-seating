@@ -431,7 +431,7 @@
     var keys = C.masterClassKeys(S.master).length;
     var ok = $('subOk');
     ok.textContent = '자동 분류했어요 · 학생 ' + S.master.length + '명 · 학급 ' + keys + '개 · 과목 ' + r.subjects.length + '개' +
-      (r.special ? ' · 비고의 “특수” ' + r.special + '명은 통합지원반(좌석 제외)으로 분류했어요. 01에서 바꿀 수 있어요' : '');
+      (r.special ? ' · 비고의 “특수” ' + r.special + '명은 통합지원반(좌석 제외)으로 분류했어요. 수동 분류에서 바꿀 수 있어요' : '');
     ok.classList.remove('hidden');
     return true;
   }
@@ -476,7 +476,7 @@
     if (roster) {
       S.rows = roster.map(function (m) { return { grade: m.grade.replace('학년', ''), cls: m.cls.replace('반', ''), no: m.no, name: m.name, kind: m.kind }; });
       renderMaster();
-      if (!applyMaster()) throw new Error('학생 명렬표에 고칠 곳이 있습니다. 01의 안내를 확인하세요.');
+      if (!applyMaster()) throw new Error('학생 명렬표에 고칠 곳이 있습니다. 수동 분류의 안내를 확인하세요.');
     } else startClass(S.classKey);
     var n = (S.subjectsBy[S.classKey] || []).length;
     var ok = $('subOk'); ok.textContent = '불러왔어요 · 과목 ' + n + '개'; ok.classList.remove('hidden');
@@ -859,6 +859,12 @@
     };
 
     // 선택과목 추가·학생 선택
+    $('inMode').onclick = function (e) {
+      var b = e.target.closest('[data-in]'); if (!b) return;
+      var man = b.dataset.in === 'manual';
+      $('autoPane').classList.toggle('hidden', man); $('manualPane').classList.toggle('hidden', !man);
+      Array.prototype.forEach.call($('inMode').children, function (x) { x.classList.toggle('on', x === b); });
+    };
     $('btnAuto').onclick = function () { $('autoFile').click(); };
     $('btnAutoPaste').onclick = function () { $('autoBox').classList.toggle('hidden'); if (!$('autoBox').classList.contains('hidden')) $('autoText').focus(); };
     $('btnAutoGo').onclick = function () {
@@ -923,7 +929,7 @@
       var k = S.mergeIds.indexOf(id); if (e.target.checked && k < 0) S.mergeIds.push(id); else if (!e.target.checked && k >= 0) S.mergeIds.splice(k, 1);
       renderMerge();
     };
-    $('btnDoMerge').onclick = function () {      // 과목 순서(02의 순서)대로 합친다
+    $('btnDoMerge').onclick = function () {      // 과목 순서(합친 순서)대로 합친다
       var ids = subs().map(function (x) { return x.id; }).filter(function (id) { return S.mergeIds.indexOf(id) >= 0; });
       addMerge(ids);
     };
