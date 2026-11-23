@@ -1,0 +1,378 @@
+{
+ "titleOneLineMaxChars": 4,
+ "slotRule": "우측 열부터 좌→우 방향으로 열을 채우고, 각 열은 아래→위 순서",
+ "layouts": {
+  "A": {
+   "id": "A",
+   "rowCnt": 6,
+   "colCnt": 7,
+   "seatCount": 21,
+   "colWidths": [
+    9627,
+    2820,
+    9980,
+    2820,
+    10094,
+    2852,
+    10572
+   ],
+   "grid": [
+    [
+     "void",
+     "gap",
+     "void",
+     "gap",
+     "seat",
+     "gap",
+     "void"
+    ],
+    [
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat"
+    ],
+    [
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat"
+    ],
+    [
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat"
+    ],
+    [
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat"
+    ],
+    [
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat"
+    ]
+   ],
+   "slotOrder": [
+    {
+     "slot": 1,
+     "col": 6,
+     "row": 5
+    },
+    {
+     "slot": 2,
+     "col": 6,
+     "row": 4
+    },
+    {
+     "slot": 3,
+     "col": 6,
+     "row": 3
+    },
+    {
+     "slot": 4,
+     "col": 6,
+     "row": 2
+    },
+    {
+     "slot": 5,
+     "col": 6,
+     "row": 1
+    },
+    {
+     "slot": 6,
+     "col": 4,
+     "row": 5
+    },
+    {
+     "slot": 7,
+     "col": 4,
+     "row": 4
+    },
+    {
+     "slot": 8,
+     "col": 4,
+     "row": 3
+    },
+    {
+     "slot": 9,
+     "col": 4,
+     "row": 2
+    },
+    {
+     "slot": 10,
+     "col": 4,
+     "row": 1
+    },
+    {
+     "slot": 11,
+     "col": 4,
+     "row": 0
+    },
+    {
+     "slot": 12,
+     "col": 2,
+     "row": 5
+    },
+    {
+     "slot": 13,
+     "col": 2,
+     "row": 4
+    },
+    {
+     "slot": 14,
+     "col": 2,
+     "row": 3
+    },
+    {
+     "slot": 15,
+     "col": 2,
+     "row": 2
+    },
+    {
+     "slot": 16,
+     "col": 2,
+     "row": 1
+    },
+    {
+     "slot": 17,
+     "col": 0,
+     "row": 5
+    },
+    {
+     "slot": 18,
+     "col": 0,
+     "row": 4
+    },
+    {
+     "slot": 19,
+     "col": 0,
+     "row": 3
+    },
+    {
+     "slot": 20,
+     "col": 0,
+     "row": 2
+    },
+    {
+     "slot": 21,
+     "col": 0,
+     "row": 1
+    }
+   ],
+   "firstPageVposShift": 360
+  },
+  "B": {
+   "id": "B",
+   "rowCnt": 6,
+   "colCnt": 9,
+   "seatCount": 21,
+   "colWidths": [
+    8010,
+    2546,
+    8010,
+    2546,
+    8293,
+    2546,
+    8385,
+    2572,
+    8772
+   ],
+   "grid": [
+    [
+     "x",
+     "gap",
+     "void",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "x"
+    ],
+    [
+     "void",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "x"
+    ],
+    [
+     "void",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat"
+    ],
+    [
+     "void",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat"
+    ],
+    [
+     "void",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat"
+    ],
+    [
+     "void",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat",
+     "gap",
+     "seat"
+    ]
+   ],
+   "slotOrder": [
+    {
+     "slot": 1,
+     "col": 8,
+     "row": 5
+    },
+    {
+     "slot": 2,
+     "col": 8,
+     "row": 4
+    },
+    {
+     "slot": 3,
+     "col": 8,
+     "row": 3
+    },
+    {
+     "slot": 4,
+     "col": 8,
+     "row": 2
+    },
+    {
+     "slot": 5,
+     "col": 6,
+     "row": 5
+    },
+    {
+     "slot": 6,
+     "col": 6,
+     "row": 4
+    },
+    {
+     "slot": 7,
+     "col": 6,
+     "row": 3
+    },
+    {
+     "slot": 8,
+     "col": 6,
+     "row": 2
+    },
+    {
+     "slot": 9,
+     "col": 6,
+     "row": 1
+    },
+    {
+     "slot": 10,
+     "col": 6,
+     "row": 0
+    },
+    {
+     "slot": 11,
+     "col": 4,
+     "row": 5
+    },
+    {
+     "slot": 12,
+     "col": 4,
+     "row": 4
+    },
+    {
+     "slot": 13,
+     "col": 4,
+     "row": 3
+    },
+    {
+     "slot": 14,
+     "col": 4,
+     "row": 2
+    },
+    {
+     "slot": 15,
+     "col": 4,
+     "row": 1
+    },
+    {
+     "slot": 16,
+     "col": 4,
+     "row": 0
+    },
+    {
+     "slot": 17,
+     "col": 2,
+     "row": 5
+    },
+    {
+     "slot": 18,
+     "col": 2,
+     "row": 4
+    },
+    {
+     "slot": 19,
+     "col": 2,
+     "row": 3
+    },
+    {
+     "slot": 20,
+     "col": 2,
+     "row": 2
+    },
+    {
+     "slot": 21,
+     "col": 2,
+     "row": 1
+    }
+   ],
+   "firstPageVposShift": 0
+  }
+ }
+}
