@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>교실 자리 배치</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--ink:#1f2937;--mute:#6b7280;--pri:#3b82f6;--line:#d9dde7;--lock:#fde68a}
+@media (prefers-color-scheme:dark){:root{--bg:#111827;--card:#1f2937;--ink:#f3f4f6;--mute:#9ca3af;--line:#374151;--lock:#78581a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic",system-ui,sans-serif}
+header{padding:16px;text-align:center}
+h1{margin:0;font-size:1.4rem}
+main{max-width:1100px;margin:0 auto;padding:0 16px 32px;display:grid;gap:16px;grid-template-columns:300px 1fr}
+@media(max-width:800px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+label{display:block;font-size:.85rem;color:var(--mute);margin:8px 0 4px}
+textarea,input{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+textarea{height:220px;resize:vertical}
+.row{display:flex;gap:8px}
+button{padding:9px 12px;border:0;border-radius:8px;background:var(--pri);color:#fff;font:inherit;cursor:pointer}
+button.sub{background:var(--line);color:var(--ink)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.board{text-align:center;background:var(--line);border-radius:8px;padding:6px;margin-bottom:12px;font-weight:bold}
+#grid{display:grid;gap:8px}
+.seat{min-height:56px;display:flex;align-items:center;justify-content:center;text-align:center;border:2px solid var(--line);border-radius:8px;padding:4px;cursor:grab;background:var(--bg);word-break:keep-all;user-select:none}
+.seat.locked{background:var(--lock);border-color:#d4a017}
+.seat.off{opacity:.3;border-style:dashed}
+.seat.sel{outline:3px solid var(--pri)}
+.hint{font-size:.8rem;color:var(--mute);margin-top:8px;line-height:1.5}
+@media print{header,aside,.hint{display:none}main{display:block}body{background:#fff}}
+</style>
+</head>
+<body>
+<header><h1>교실 자리 배치</h1></header>
+<main>
+<aside class="card">
+  <label>학생 명단 (한 줄에 한 명, 엑셀에서 붙여넣기 가능)</label>
+  <textarea id="names" placeholder="김철수&#10;이영희&#10;..."></textarea>
+  <div class="row">
+    <div><label>줄(가로 칸)</label><input id="cols" type="number" min="1" max="12" value="6"></div>
+    <div><label>행(세로 칸)</label><input id="rows" type="number" min="1" max="12" value="5"></div>
+  </div>
+  <div class="btns">
+    <button id="shuffle">자리 뽑기</button>
+    <button class="sub" id="reset">초기화</button>
+    <button class="sub" id="flip">앞뒤 뒤집기</button>
+    <button class="sub" id="print">인쇄/PDF</button>
+  </div>
+  <p class="hint">• 좌석 클릭: 선택 → 다른 좌석 클릭 시 서로 교환<br>• 더블클릭: 자리 고정(노랑) 토글<br>• 우클릭: 빈 자리(사용 안 함) 토글<br>• 뽑기 시 고정·빈 자리는 그대로 두고 나머지만 섞습니다.<br>• 이름은 이 브라우저 안에서만 처리되며 어디에도 전송·저장되지 않습니다.</p>
+</aside>
+<section class="card">
+  <div class="board" id="board">교탁 / 칠판</div>
+  <div id="grid"></div>
+  <p class="hint" id="info"></p>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let seats=[],sel=-1,flipped=false;
+// seat: {name:'', locked:false, off:false}
+function size(){return[Math.max(1,Math.min(12,+$('cols').value||1)),Math.max(1,Math.min(12,+$('rows').value||1))]}
+function names(){return $('names').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean)}
+function ensure(){
+  const[c,r]=size(),n=c*r;
+  while(seats.length<n)seats.push({name:'',locked:false,off:false});
+  seats.length=n;
+}
+function render(){
+  ensure();
+  const[c]=size(),g=$('grid');
+  g.style.gridTemplateColumns=`repeat(${c},1fr)`;
+  g.innerHTML='';
+  const order=seats.map((_,i)=>i);
+  if(flipped)order.reverse();
+  order.forEach(i=>{
+    const s=seats[i],d=document.createElement('div');
+    d.className='seat'+(s.locked?' locked':'')+(s.off?' off':'')+(i===sel?' sel':'');
+    d.textContent=s.off?'':s.name;
+    d.onclick=()=>{
+      if(sel<0){sel=i}
+      else if(sel===i){sel=-1}
+      else{const a=seats[sel],b=seats[i];[a.name,b.name]=[b.name,a.name];sel=-1}
+      render();
+    };
+    d.ondblclick=()=>{sel=-1;s.locked=!s.locked;render()};
+    d.oncontextmenu=e=>{e.preventDefault();sel=-1;s.off=!s.off;if(s.off){s.name='';s.locked=false}render()};
+    g.appendChild(d);
+  });
+  const free=seats.filter(s=>!s.off).length,cnt=names().length;
+  $('info').textContent=`학생 ${cnt}명 / 사용 가능한 자리 ${free}개`+(cnt>free?' — 자리가 부족합니다!':'');
+  $('board').style.order=0;
+}
+function shuffle(){
+  ensure();
+  const list=names();
+  const fixed=new Set(seats.filter(s=>s.locked&&s.name).map(s=>s.name));
+  const pool=list.filter(n=>!fixed.has(n));
+  for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
+  const open=seats.filter(s=>!s.off&&!s.locked);
+  // 고정석 이름이 명단에서 지워진 경우 비움
+  seats.forEach(s=>{if(s.locked&&s.name&&!list.includes(s.name))s.name=''});
+  open.forEach(s=>s.name=pool.shift()||'');
+  if(pool.length)alert(`자리가 부족해 ${pool.length}명이 배치되지 않았습니다: ${pool.join(', ')}`);
+  sel=-1;render();
+}
+$('shuffle').onclick=shuffle;
+$('reset').onclick=()=>{seats=[];sel=-1;render()};
+$('flip').onclick=()=>{flipped=!flipped;$('board').textContent=flipped?'칠판 / 교탁 (뒤집힌 시점)':'교탁 / 칠판';render()};
+$('print').onclick=()=>window.print();
+['cols','rows'].forEach(id=>$(id).oninput=render);
+$('names').oninput=render;
+$('names').value=['김가온','이나래','박다솜','최라온','정마루','강바다','조사랑','윤아름','장지우','임하늘'].join('\n');
+render();
+</script>
+</body>
+</html>
