@@ -128,7 +128,9 @@
     candidates.sort(function (a, b) { return a - b; });
     if (!page.common) { // 순서는 언제나 같다: 1순위 선택과목 학생, 2순위 번호순 (선택 학생 번호순 → 이어서 나머지 학생 번호순). 무작위는 없다.
       var pick = page.pick || [];
-      var picks = candidates.filter(function (no) { return pick.indexOf(no) >= 0; });
+      var picks = page.ordered   // 합본 쪽: 과목 순서대로 이어 붙인 선택 순서를 지킨다
+        ? pick.filter(function (no, k) { return candidates.indexOf(no) >= 0 && pick.indexOf(no) === k; })
+        : candidates.filter(function (no) { return pick.indexOf(no) >= 0; });
       var others = candidates.filter(function (no) { return pick.indexOf(no) < 0; });
       candidates = picks.concat(others);
     }
@@ -165,6 +167,7 @@
     cls.subjects.forEach(function (sub, i) {
       var pg = newPage(sub.subject, false, allNos, pageSeed(globalSeed, i + 1));
       pg.pick = sub.nos.slice();
+      if (sub.ordered) { pg.ordered = true; pg.mid = sub.id; } else pg.sid = sub.id;
       pg.expected = sub.expected == null ? null : sub.expected;
       fillPage(pg, cls, ctx);
       pages.push(pg);
@@ -363,7 +366,7 @@
     var students = {};
     rows.forEach(function (r) { students[r.no] = { no: r.no, name: r.name, kind: r.kind || '', notes: r.kind ? [r.kind] : [] }; });
     var list = Object.keys(students).map(Number).sort(function (a, b) { return a - b; }).map(function (n) { return students[n]; });
-    var subs = (subjects || []).map(function (s) { return { subject: s.subject, raw: s.raw, group: s.group, expected: s.expected == null ? null : s.expected, pairs: s.pairs || [], left: s.left || [], nos: s.nos.filter(function (n) { return students[n]; }) }; });
+    var subs = (subjects || []).map(function (s) { return { id: s.id, ordered: !!s.ordered, subject: s.subject, raw: s.raw, group: s.group, expected: s.expected == null ? null : s.expected, pairs: s.pairs || [], left: s.left || [], nos: s.nos.filter(function (n) { return students[n]; }) }; });
     if (opts.sortSubjects === 'ga') subs.sort(function (a, b) { return a.subject.localeCompare(b.subject, 'ko'); });
     var first = rows[0] || {};
     return { key: classKey, grade: first.grade, cls: first.cls, students: students, studentList: list, subjects: subs };

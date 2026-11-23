@@ -16,7 +16,7 @@
   var S = {
     rows: blankRows(5),                                            // 학생 명렬표(입력 중인 표)
     master: null, dirty: true,                                      // 확정된 학생 명렬표
-    subjectsBy: {}, openSub: -1,                                    // 학급별 선택과목(추가한 순서) 목록
+    subjectsBy: {}, mergesBy: {}, mergeOpen: false, mergeIds: [], openSub: -1,                                    // 학급별 선택과목(추가한 순서) 목록
     classKey: null, cls: null,
     mode: 'A',                                                      // 'A' 4열 | 'B' 5열 | 'manual' 직접 조정
     types: { A: C.defaultTypes(4), B: C.defaultTypes(5), M: C.defaultTypes(4, 6) }, mcols: 4, mrows: 6,
@@ -175,43 +175,100 @@
   }
 
   /* ---------- ② 선택과목 (추가한 순서대로) ---------- */
+  var nid = 0;
   function subs() { var k = S.classKey; if (!S.subjectsBy[k]) S.subjectsBy[k] = []; return S.subjectsBy[k]; }
-  function subList(key) { return (S.subjectsBy[key] || []).map(function (x) { return { subject: x.name, nos: x.nos.slice(), expected: null }; }); }
+  function merges() { var k = S.classKey; if (!S.mergesBy[k]) S.mergesBy[k] = []; return S.mergesBy[k]; }
+  function subById(id) { return subs().filter(function (x) { return x.id === id; })[0]; }
+  function mergeName(m) { return m.name || m.ids.map(function (id) { var x = subById(id); return x ? x.name : ''; }).join('+'); }
+  function mergeNos(m) {          // 과목 순서대로, 과목 안에서는 번호순 (겹치면 앞 과목에 둔다)
+    var seen = {}, out = [];
+    subs().forEach(function (x) {
+      if (m.ids.indexOf(x.id) < 0) return;
+      x.nos.slice().sort(function (a, b) { return a - b; }).forEach(function (n) { if (!seen[n]) { seen[n] = 1; out.push(n); } });
+    });
+    return out;
+  }
+  function subList(key) {
+    var save = S.classKey; S.classKey = key;
+    var out = subs().map(function (x) { return { id: x.id, subject: x.name, nos: x.nos.slice(), expected: null }; })
+      .concat(merges().map(function (m) { return { id: m.id, ordered: true, subject: mergeName(m), nos: mergeNos(m), expected: null }; }));
+    S.classKey = save; return out;
+  }
   function syncSubs() {            // 좌석 확인에서 바꾼 이름·선택 학생을 목록에 반영
     if (!S.cls) return;
+    var n = subs().length;
     subs().forEach(function (x, i) { var pg = S.pages[i + 1]; if (pg) { x.name = pg.subject; x.nos = (pg.pick || []).slice(); } });
+    merges().forEach(function (m, j) { var pg = S.pages[n + 1 + j]; if (pg) pg.subject = mergeName(m); });
   }
-  function reseatSubject(i) {      // 선택 학생이 바뀌면 그 과목 쪽만 다시 배치 (선택 학생 먼저, 번호순)
+  function reseat(idx) {           // 지정한 쪽만 다시 배치 (선택 학생 먼저 → 번호순)
     S.cls.subjects = subList(S.classKey);
     var fresh = newPages();
-    if (fresh[i + 1]) S.pages[i + 1] = fresh[i + 1];
+    idx.forEach(function (i) { if (fresh[i]) S.pages[i] = fresh[i]; });
   }
+  function mergePages() { var n = subs().length, r = []; merges().forEach(function (m, j) { r.push(n + 1 + j); }); return r; }
   function addSubject(name) {
     if (!S.cls) { msg('subMsg', '먼저 학생 명렬표를 적용하세요.'); return; }
     msg('subMsg', '');
     syncSubs();
-    var list = subs();
-    name = String(name || '').trim() || '선택과목 ' + (list.length + 1);
-    list.push({ name: name, nos: [] });
+    var list = subs(), n = list.length;
+    name = String(name || '').trim() || '선택과목 ' + (n + 1);
+    list.push({ id: 's' + (++nid), name: name, nos: [] });
     S.cls.subjects = subList(S.classKey);
     var fresh = newPages();
-    S.pages.push(fresh[fresh.length - 1]);
-    S.openSub = list.length - 1; S.cur = S.pages.length - 1; S.sel = -1; S.selPool = null;
+    S.pages.splice(n + 1, 0, fresh[n + 1]);
+    reseat(mergePages());
+    S.openSub = n; S.cur = n + 1; S.sel = -1; S.selPool = null;
     render();
   }
   function removeSubject(i) {
     var x = subs()[i]; if (!x) return;
     if (!confirm('“' + x.name + '” 과목을 삭제할까요?')) return;
     syncSubs();
+    var n = subs().length, ml = merges();
+    for (var j = ml.length - 1; j >= 0; j--) {       // 합본에서도 빠진다 (과목이 1개 이하로 남으면 합본 삭제)
+      ml[j].ids = ml[j].ids.filter(function (id) { return id !== x.id; });
+      if (ml[j].ids.length < 2) { ml.splice(j, 1); S.pages.splice(n + 1 + j, 1); }
+    }
     subs().splice(i, 1); S.pages.splice(i + 1, 1);
-    S.cls.subjects = subList(S.classKey);
+    reseat(mergePages());
     S.openSub = -1; S.cur = Math.min(S.cur, S.pages.length - 1); S.sel = -1; S.selPool = null;
+    render();
+  }
+  function moveSubject(i, d) {
+    var j = i + d, list = subs();
+    if (j < 0 || j >= list.length) return;
+    syncSubs();
+    var t = list[i]; list[i] = list[j]; list[j] = t;
+    t = S.pages[i + 1]; S.pages[i + 1] = S.pages[j + 1]; S.pages[j + 1] = t;
+    if (S.openSub === i) S.openSub = j; else if (S.openSub === j) S.openSub = i;
+    if (S.cur === i + 1) S.cur = j + 1; else if (S.cur === j + 1) S.cur = i + 1;
+    reseat(mergePages());
     render();
   }
   function setSubjectPick(i, nos) {
     syncSubs();
+    var id = subs()[i].id;
     subs()[i].nos = nos;
-    reseatSubject(i); S.sel = -1; S.selPool = null;
+    reseat([i + 1].concat(mergePages().filter(function (pi) { return merges()[pi - subs().length - 1].ids.indexOf(id) >= 0; })));
+    S.sel = -1; S.selPool = null;
+    render();
+  }
+  function addMerge(ids) {
+    if (ids.length < 2) { msg('mergeMsg', '합칠 과목을 2개 이상 고르세요.'); return; }
+    msg('mergeMsg', '');
+    syncSubs();
+    merges().push({ id: 'm' + (++nid), ids: ids, name: '' });
+    S.cls.subjects = subList(S.classKey);
+    var fresh = newPages();
+    S.pages.push(fresh[fresh.length - 1]);
+    S.cur = S.pages.length - 1; S.sel = -1; S.selPool = null; S.mergeOpen = false; S.mergeIds = [];
+    render();
+  }
+  function removeMerge(j) {
+    syncSubs();
+    var n = subs().length;
+    merges().splice(j, 1); S.pages.splice(n + 1 + j, 1);
+    S.cur = Math.min(S.cur, S.pages.length - 1); S.sel = -1;
     render();
   }
   function renderSubjects() {
@@ -228,8 +285,21 @@
       return '<div class="subcard' + (open ? ' open' : '') + '"><div class="subhead"><span class="idx">' + (i + 1) + '</span>' +
         '<input type="text" class="subname" data-subname="' + i + '" value="' + esc(x.name) + '" aria-label="과목명">' +
         '<span class="cnt">' + x.nos.length + '명</span>' +
+        '<button class="sub mini mv" data-submv="' + i + '" data-d="-1" aria-label="위로"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+        '<button class="sub mini mv" data-submv="' + i + '" data-d="1" aria-label="아래로"' + (i === list.length - 1 ? ' disabled' : '') + '>▼</button>' +
         '<button class="sub mini" data-subopen="' + i + '">' + (open ? '접기' : '학생 선택') + '</button>' +
         '<button class="sub mini del" data-subdel="' + i + '" aria-label="과목 삭제">삭제</button></div>' + body + '</div>';
+    }).join('');
+  }
+  function renderMerge() {
+    var box = $('mergeBox'), has = S.cls && subs().length >= 2;
+    $('btnMerge').classList.toggle('hidden', !has);
+    box.classList.toggle('hidden', !has || !S.mergeOpen);
+    if (!has) return;
+    var ids = S.mergeIds || [];
+    $('mergePick').innerHTML = subs().map(function (x) {
+      var k = ids.indexOf(x.id);
+      return '<label class="ep' + (k >= 0 ? ' on' : '') + '"><input type="checkbox" data-mg="' + x.id + '"' + (k >= 0 ? ' checked' : '') + '>' + esc(x.name) + '</label>';
     }).join('');
   }
   function renderExportPick() {
@@ -283,7 +353,7 @@
           var i = sm[r + ',' + c], no = pg.seats[i], blocked = pg.blocked.indexOf(i) >= 0;
           var locked = no != null && pg.locked.indexOf(no) >= 0;
           var cls = 'seat' + (no == null && !blocked ? ' empty' : '') + (locked ? ' locked' : '') + (blocked ? ' blocked' : '') + (no != null && isPicked(pg, no) ? ' picked' : '') + (opt.sel === i ? ' sel' : '');
-          var inner = '<span class="slot">' + (i + 1) + '</span>' + hv(r, dc, [['blank', '빈칸'], ['x', 'X']], opt.interactive);
+          var inner = '<span class="slot">' + (i + 1) + '</span>' + hv(r, dc, [['x', 'X']], opt.interactive);
           if (blocked) inner += '<span class="nm">비움</span>';
           else if (no != null) inner += '<span class="no">' + no + '</span><span class="nm">' + esc(S.cls.students[no].name) + '</span>' + (locked ? '<span class="tag">●</span>' : '');
           html += '<div class="' + cls + '" data-slot="' + i + '"' + (opt.interactive && !blocked && no != null ? ' draggable="true"' : '') + '>' + inner + '</div>';
@@ -347,7 +417,7 @@
     syncSubs();
     var ae = document.activeElement;
     if (!(ae && ae.classList && ae.classList.contains('subname'))) renderSubjects();
-    renderExportPick();
+    renderMerge(); renderExportPick();
     renderSummary(); renderTabs(); renderPage();
   }
   function renderSummary() {
@@ -359,7 +429,7 @@
   }
   function renderTabs() {
     $('tabs').innerHTML = S.pages.map(function (pg, i) {
-      return '<div class="tab' + (i === S.cur ? ' cur' : '') + '" data-i="' + i + '">' + esc(pg.common ? '공통' : pg.subject) + '</div>';
+      return '<div class="tab' + (i === S.cur ? ' cur' : '') + (pg.mid ? ' mg' : '') + '" data-i="' + i + '">' + esc(pg.common ? '공통' : pg.subject) + '</div>';
     }).join('');
   }
   function renderPage() {
@@ -374,18 +444,18 @@
       }).join('') + '</div>';
       return;
     }
-    $('paper').innerHTML = paperHtml(pg, { sel: S.sel, interactive: true }) + (pg.common ? '' : '<div class="legend"><i></i>' + esc(pg.subject) + ' 선택 학생</div>');
+    $('paper').innerHTML = paperHtml(pg, { sel: S.sel, interactive: true }) + (pg.common ? '' : '<div class="legend"><i></i>' + esc(pg.mid ? '선택 학생(과목 순서대로)' : pg.subject + ' 선택 학생') + '</div>');
     var bar = '';
     if (S.sel >= 0) {
       var no = pg.seats[S.sel];
       bar += '<b>슬롯 ' + (S.sel + 1) + (no != null ? ' · ' + no + ' ' + esc(S.cls.students[no].name) : ' · 빈자리') + '</b>';
       if (no != null) bar += '<button class="sub" data-act="lock">' + (pg.locked.indexOf(no) >= 0 ? '고정 해제' : '고정') + '</button><button class="sub" data-act="unseat">자리 빼기</button><button class="sub" data-act="rename">이름 수정</button>';
-      bar += '<button class="sub" data-act="cellblank">칸을 빈칸으로</button><button class="sub" data-act="cellx">칸을 X로</button>';
+      bar += '<button class="sub" data-act="cellx">칸을 X로</button>';
       if (no != null) bar += '<button class="sub" data-act="excl">학생 제외</button>';
       bar += '<button class="sub" data-act="desel">취소</button>';
     }
     $('selbar').innerHTML = bar;
-    $('namePanel').classList.toggle('hidden', pg.common); $('pgName').value = pg.subject;
+    $('namePanel').classList.toggle('hidden', pg.common); $('btnUnmerge').classList.toggle('hidden', !pg.mid); $('pgName').value = pg.subject;
     var pool = unseated(pg);
     $('poolPanel').classList.toggle('hidden', !pool.length);
     $('pool').innerHTML = pool.map(function (n) { return '<span class="chip' + (S.selPool === n ? ' sel' : '') + (isPicked(pg, n) ? ' picked' : '') + '" draggable="true" data-pool="' + n + '"><i>' + n + '</i>' + esc(S.cls.students[n].name) + '</span>'; }).join('');
@@ -396,7 +466,7 @@
     $('stulist').innerHTML = S.cls.studentList.map(function (s) {
       var ex = c.excluded(s.no);
       return '<div class="rw"><label><input type="checkbox" data-stu="' + s.no + '"' + (ex ? '' : ' checked') + '><span class="' + (ex ? 'ex' : '') + '">' + s.no + ' ' + esc(s.name) + '</span>' + (s.kind ? '<span class="nt">' + esc(s.kind) + '</span>' : '') + '</label>' +
-        (pg.common ? '' : '<button class="pk' + (isPicked(pg, s.no) ? ' on' : '') + '" data-pick="' + s.no + '" title="이 과목 선택 학생" aria-label="이 과목 선택 학생"></button>') + '</div>';
+        (pg.common || pg.mid ? '' : '<button class="pk' + (isPicked(pg, s.no) ? ' on' : '') + '" data-pick="' + s.no + '" title="이 과목 선택 학생" aria-label="이 과목 선택 학생"></button>') + '</div>';
     }).join('');
   }
 
@@ -439,7 +509,7 @@
     S.sel = -1; render();
   }
   function togglePick(no) {
-    var pg = cur(); if (pg.common) return;
+    var pg = cur(); if (pg.common || pg.mid) return;
     push();
     var i = pg.pick.indexOf(no);
     if (i >= 0) pg.pick.splice(i, 1); else pg.pick.push(no);
@@ -531,9 +601,9 @@
   function b64ToBytes(b64) { var bin = atob(b64), u = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
   function doExport() {
     var out = $('expMsg'), sel = S.pages.filter(function (p) { return !p.skipExp; });
-    if (!sel.length) { out.textContent = '내보낼 쪽을 하나 이상 선택하세요.'; return; }
+    if (!sel.length) { out.textContent = '내보낼 과목을 하나 이상 선택하세요.'; return; }
     var bad = sel.filter(function (p) { return p.overflow.length || unseated(p).length; });
-    if (bad.length && !confirm('앉지 못한 학생이 있는 쪽이 있습니다 (' + bad.map(function (p) { return p.subject; }).join(', ') + '). 그래도 내보낼까요?')) return;
+    if (bad.length && !confirm('앉지 못한 학생이 있는 과목이 있습니다 (' + bad.map(function (p) { return p.subject; }).join(', ') + '). 그래도 내보낼까요?')) return;
     out.textContent = '만드는 중…';
     drawPreview(sel[0]).then(function (png) {
       return H.buildHwpx({ JSZip: window.JSZip, DOMParser: window.DOMParser, XMLSerializer: window.XMLSerializer },
@@ -589,6 +659,7 @@
     sl.onclick = function (e) {
       var d = e.target.dataset || {};
       if (d.subopen != null && d.subopen !== '') { S.openSub = S.openSub === +d.subopen ? -1 : +d.subopen; renderSubjects(); }
+      else if (d.submv != null && d.submv !== '') moveSubject(+d.submv, +d.d);
       else if (d.subdel != null && d.subdel !== '') removeSubject(+d.subdel);
       else if (d.suball != null && d.suball !== '') setSubjectPick(+d.suball, S.cls.studentList.map(function (st) { return st.no; }));
       else if (d.subnone != null && d.subnone !== '') setSubjectPick(+d.subnone, []);
@@ -615,7 +686,22 @@
     $('clsSel').onchange = function (e) { startClass(e.target.value); };
     $('pgName').onchange = function (e) {
       var pg = cur(), v = e.target.value.trim(); if (pg.common || !v || v === pg.subject) { e.target.value = pg.subject; return; }
-      push(); pg.subject = v; render();
+      if (pg.mid) { var mi = S.pages.indexOf(pg) - subs().length - 1; if (merges()[mi]) merges()[mi].name = v; }
+      pg.subject = v; render();
+    };
+    $('btnUnmerge').onclick = function () {
+      var pg = cur(); if (!pg.mid) return;
+      removeMerge(S.pages.indexOf(pg) - subs().length - 1);
+    };
+    $('btnMerge').onclick = function () { S.mergeOpen = !S.mergeOpen; S.mergeIds = []; msg('mergeMsg', ''); renderMerge(); };
+    $('mergePick').onchange = function (e) {
+      var id = e.target.dataset && e.target.dataset.mg; if (!id) return;
+      var k = S.mergeIds.indexOf(id); if (e.target.checked && k < 0) S.mergeIds.push(id); else if (!e.target.checked && k >= 0) S.mergeIds.splice(k, 1);
+      renderMerge();
+    };
+    $('btnDoMerge').onclick = function () {      // 과목 순서(02의 순서)대로 합친다
+      var ids = subs().map(function (x) { return x.id; }).filter(function (id) { return S.mergeIds.indexOf(id) >= 0; });
+      addMerge(ids);
     };
 
     $('tabs').onclick = function (e) {
@@ -670,7 +756,6 @@
       if (a === 'lock') toggleLock();
       else if (a === 'unseat') unseat(S.sel);
       else if (a === 'rename') { var rn = cur().seats[S.sel]; if (rn != null) renameStudent(rn); }
-      else if (a === 'cellblank' && slot) setCell(slot.row, slot.col / 2, 'blank');
       else if (a === 'cellx' && slot) setCell(slot.row, slot.col / 2, 'x');
       else if (a === 'excl') { var no = cur().seats[S.sel]; if (no != null) setExcluded(no, true); }
       else if (a === 'desel') { S.sel = -1; render(); }

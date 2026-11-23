@@ -165,10 +165,14 @@ button.done{background:#1f9d62;border-color:#1f9d62}
 .fileinfo button{padding:3px 12px;font-size:.8rem}
 .expinfo{margin-top:8px;font-size:.82rem;color:var(--mute)}
 .expinfo.bad{color:var(--warn)}
-.hv{display:none;position:absolute;right:4px;top:4px;gap:3px;z-index:2}
-.seat:hover .hv,.vcell:hover .hv,.xcell:hover .hv{display:flex}
-.hv button{padding:1px 8px;font-size:.7rem;border-radius:999px;background:#fff;color:var(--ink);border-color:var(--line)}
-.hv button:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.hv{display:flex;position:absolute;right:4px;top:4px;gap:3px;z-index:2}
+.hv button{padding:0;min-width:22px;height:22px;line-height:20px;font-size:.78rem;font-weight:700;border-radius:50%;background:#D92D20;color:#fff;border:0;opacity:1;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.hv button:hover{background:#B42318}
+.xcell .hv button,.vcell .hv button{border-radius:999px;padding:0 10px;background:var(--ink)}
+.mergebox{margin-top:12px;border:1px solid var(--pri);border-radius:22px;padding:14px 16px;background:#f7faff}
+.tab.mg{border-style:dashed}
+.subhead .mv{padding:2px 8px}
+.subhead .mv:disabled{opacity:.3;cursor:default}
 .vcell{position:relative;border:1.5px dashed #c5cfdd;border-radius:14px;min-height:74px;background:#fafbfd}
 .xcell{position:relative;min-height:74px}
 .sh .tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -259,8 +263,15 @@ details[open]>summary::before{content:"▾"}
     <div class="row" style="align-items:center">
       <div class="g" style="flex:3"><div class="tabs" id="tabs"></div></div>
       <div class="btns">
+        <button class="sub hidden" id="btnMerge">과목 합치기</button>
         <button class="sub" id="btnView">전체 보기</button>
       </div>
+    </div>
+    <div id="mergeBox" class="mergebox hidden">
+      <div class="zt"><b>같이 시험 보는 과목 선택 <small>(02의 과목 순서대로 합쳐져요)</small></b></div>
+      <div class="eps" id="mergePick"></div>
+      <div class="btns" style="margin-top:10px"><button id="btnDoMerge">합치기</button></div>
+      <div id="mergeMsg" class="warn hidden"></div>
     </div>
     <div id="pageWarn"></div>
     <div id="thumbView" class="hidden"></div>
@@ -273,6 +284,7 @@ details[open]>summary::before{content:"▾"}
         <div class="panel" id="namePanel">
           <h3>쪽 이름</h3>
           <input id="pgName" type="text">
+          <button class="sub mini hidden" id="btnUnmerge" style="margin-top:8px">합치기 해제</button>
         </div>
         <div class="panel hidden" id="poolPanel">
           <h3>배치 대기 <span class="q" tabindex="0" data-tip="학생을 좌석으로 끌어 놓아요. 좌석을 여기로 끌면 자리가 비워져요.">?</span></h3>
@@ -295,7 +307,7 @@ details[open]>summary::before{content:"▾"}
   <section id="sExp" class="hidden">
     <div class="sh"><span class="n">05</span><h2>내보내기</h2></div>
     <div class="expzone pickzone">
-      <div class="zt"><b>내보낼 쪽 선택</b><span class="zb"><button class="sub mini" id="btnExpAll">전체 선택</button><button class="sub mini" id="btnExpNone">전체 해제</button></span></div>
+      <div class="zt"><b>내보낼 과목 선택</b><span class="zb"><button class="sub mini" id="btnExpAll">전체 선택</button><button class="sub mini" id="btnExpNone">전체 해제</button></span></div>
       <div class="eps" id="expPick"></div>
     </div>
     <div class="expzone gozone">
@@ -307,9 +319,9 @@ details[open]>summary::before{content:"▾"}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="src/data.js?v=mwt9bt5a"></script>
-<script src="src/core.js?v=mwt9bt5a"></script>
-<script src="src/hwpx.js?v=mwt9bt5a"></script>
-<script src="src/app.js?v=mwt9bt5a"></script>
+<script src="src/data.js?v=mwt9q11h"></script>
+<script src="src/core.js?v=mwt9q11h"></script>
+<script src="src/hwpx.js?v=mwt9q11h"></script>
+<script src="src/app.js?v=mwt9q11h"></script>
 </body>
 </html>
