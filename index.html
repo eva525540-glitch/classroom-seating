@@ -194,6 +194,9 @@ button.done{background:#1f9d62;border-color:#1f9d62}
 .subsec+.subsec{border-top:1px dashed var(--line);margin-top:18px}
 .sh2{display:flex;align-items:center;gap:10px;margin:0 0 12px}
 .sh2 h3{margin:0;font-family:var(--round);font-size:1.02rem;font-weight:400;letter-spacing:.04em}
+.loadbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--soft);border-radius:999px;padding:8px 16px}
+.lb-t{font-family:var(--round);font-size:.9rem;color:var(--ink);margin-right:4px}
+#subMsg,#subOk{margin-top:10px}
 .cls-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}
 .cls-tabs .ct{border:1px solid var(--line);background:#fff;color:var(--mute);border-radius:999px;padding:6px 18px;font-size:.92rem;cursor:pointer}
 .cls-tabs .ct.on{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -242,41 +245,30 @@ details[open]>summary::before{content:"▾"}
   <section id="sInput">
     <div class="sh"><span class="n">01</span><h2>명렬표 입력</h2>
       <span class="tools"><button class="sub mini tipb tipr" id="btnSave" data-tip="학생 명렬표와 선택과목을 엑셀로 저장해요.&#10;나중에 불러와 이어서 작업할 수 있어요.">작업 저장</button><button class="sub mini tipb tipr" id="btnLoad" data-tip="저장한 작업 파일을 불러와&#10;이어서 작업해요.">작업 불러오기</button></span>
-      <input id="workFile" type="file" accept=".xlsx,.xls" hidden><input id="autoFile" type="file" accept=".xlsx,.xls,.csv" hidden></div>
-    <div class="seg" id="inMode"><button class="on" data-in="auto">자동 분류</button><button data-in="manual">수동 분류</button></div>
+      <input id="workFile" type="file" accept=".xlsx,.xls" hidden></div>
+
+    <div class="loadbar">
+      <span class="lb-t">불러오기</span>
+      <button class="sub mini tipb" id="btnMasterFile" data-tip="[이동수업 명단] 또는 학생 명렬표 엑셀·CSV 파일을 올려요.">파일 올리기</button>
+      <button class="sub mini tipb" id="btnAutoPaste" data-tip="엑셀에서 표를 복사(Ctrl+C)해&#10;붙여넣기(Ctrl+V)해요.">표 붙여넣기</button>
+      <button class="sub mini tipb" id="btnTpl" data-tip="직접 입력용 학생 명렬표 엑셀 양식을 받아요.">양식 받기</button>
+      <span class="q wide" tabindex="0" data-tip="[반편성] - [이동수업 명단] 엑셀 파일이나 그 표를 올리면&#10;학생 명렬표와 선택과목이 자동으로 분류돼요.&#10;직접 만든 명렬표(양식)도 올릴 수 있어요.&#10;표 붙여넣기는 엑셀에서 복사(Ctrl+C)해 붙여넣기(Ctrl+V)하면 돼요.">?</span>
+      <input id="masterFile" type="file" accept=".xlsx,.xls,.csv" hidden>
+    </div>
+    <div id="autoBox" class="hidden" style="margin-top:10px">
+      <textarea id="autoText" placeholder="엑셀에서 표를 머리글부터 복사해 붙여넣으세요"></textarea>
+      <div class="btns" style="margin-top:8px"><button class="sub" id="btnAutoGo">넣기</button></div>
+    </div>
     <div id="subMsg" class="warn hidden"></div>
     <div id="subOk" class="okline hidden"></div>
 
-    <div id="autoPane">
-      <div class="autorow">
-        <button class="sub mini tipb" id="btnAuto" data-tip="[이동수업 명단] 엑셀 파일을 올려요.">파일 올리기</button>
-        <button class="sub mini tipb" id="btnAutoPaste" data-tip="[이동수업 명단] 표를 복사(Ctrl+C)해&#10;붙여넣기(Ctrl+V)해요.">표 붙여넣기</button>
-        <span class="q wide" tabindex="0" data-tip="① 학교 시스템의 [반편성] - [이동수업 명단] 엑셀 파일을 준비하세요.&#10;② 「파일 올리기」로 올리면 학생 명렬표와 선택과목이 자동으로 분류돼요.&#10;「표 붙여넣기」는 그 표를 엑셀에서 그대로 복사(Ctrl+C)해&#10;붙여넣기(Ctrl+V)하면 돼요.&#10;③ 분류된 결과는 아래에서 확인하고 고칠 수 있어요.">?</span>
-      </div>
-      <div id="autoBox" class="hidden" style="margin-top:10px">
-        <textarea id="autoText" placeholder="[이동수업 명단] 표를 머리글(학번·이름·과목…)부터 복사해 붙여넣으세요"></textarea>
-        <div class="btns" style="margin-top:8px"><button class="sub" id="btnAutoGo">자동 분류</button></div>
-      </div>
-    </div>
-
-    <div id="manualTools" class="autorow hidden">
-      <button class="sub mini tipb" id="btnTpl" data-tip="학생 명렬표 엑셀 양식을 내려받아요.">엑셀 양식 내려받기</button>
-      <button class="sub mini tipb" id="btnMasterFile" data-tip="양식에 적은 엑셀·CSV 파일을 올려요.">엑셀 올리기</button>
-      <button class="sub mini tipb" id="lnkPaste" data-tip="엑셀에서 학년·반·번호·이름·구분 표를 복사(Ctrl+C)해&#10;붙여넣기(Ctrl+V)하세요. 머리글은 없어도 돼요.&#10;학급이 섞여 있어도 반별로 나눠 보여요.">표 붙여넣기</button>
-      <input id="masterFile" type="file" accept=".xlsx,.xls,.csv" hidden>
-    </div>
-
-    <div id="editor" class="hidden">
+    <div id="editor">
       <div class="cls-tabs hidden" id="clsTabs"></div>
       <div class="subsec">
         <div class="sh2"><h3>학생 명렬표</h3>
-          <span class="q" tabindex="0" data-tip="이름과 번호는 이 표가 기준이에요.&#10;구분을 고르면 좌석에서 제외돼요.&#10;고친 뒤에는 「명렬표 적용」을 누르세요.">?</span></div>
+          <span class="q" tabindex="0" data-tip="이름과 번호는 이 표가 기준이에요.&#10;구분을 고르면 좌석에서 제외돼요.&#10;직접 입력하거나 고친 뒤에는 「명렬표 적용」을 누르세요.">?</span></div>
         <details id="mdet" open>
           <summary><span class="sumtxt">학생 입력표</span><span id="masterOk" class="okbadge hidden"></span></summary>
-          <div id="pasteBox" class="hidden" style="margin:10px 0">
-            <textarea id="paste" placeholder="학년&#9;반&#9;번호&#9;이름&#9;구분"></textarea>
-            <div class="btns" style="margin-top:8px"><button class="sub" id="btnPaste">표에 넣기</button></div>
-          </div>
           <div class="mtbl" id="mtbl"></div>
           <div class="btns" style="margin-top:10px">
             <button class="sub" id="btnAddRow">행 추가</button>
@@ -373,9 +365,9 @@ details[open]>summary::before{content:"▾"}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="src/data.js?v=mwterizv"></script>
-<script src="src/core.js?v=mwterizv"></script>
-<script src="src/hwpx.js?v=mwterizv"></script>
-<script src="src/app.js?v=mwterizv"></script>
+<script src="src/data.js?v=mwtezpur"></script>
+<script src="src/core.js?v=mwtezpur"></script>
+<script src="src/hwpx.js?v=mwtezpur"></script>
+<script src="src/app.js?v=mwtezpur"></script>
 </body>
 </html>

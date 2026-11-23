@@ -19,7 +19,7 @@
     subjectsBy: {}, mergesBy: {}, mergeOpen: false, mergeIds: [], openSub: -1,                                    // 학급별 선택과목(추가한 순서) 목록
     classKey: null, cls: null,
     mode: 'A',                                                      // 'A' 4열 | 'B' 5열 | 'manual' 직접 조정
-    types: { A: C.defaultTypes(4), B: C.defaultTypes(5), M: C.defaultTypes(4, 6) }, mcols: 4, mrows: 6, undo: [], viewKey: null, inMode: 'auto',
+    types: { A: C.defaultTypes(4), B: C.defaultTypes(5), M: C.defaultTypes(4, 6) }, mcols: 4, mrows: 6, undo: [], viewKey: null,
     seed: 1, keywords: C.DEFAULT_KEYWORDS.slice(),
     manual: {}, pages: [], cur: 0, sel: -1, selPool: null, thumbs: false
   };
@@ -94,12 +94,6 @@
     if (S.master && !S.dirty && C.masterClassKeys(S.master).some(function (k) { return k.key === key; })) { $('clsSel').value = key; startClass(key); }
     else { renderMaster(); renderClsTabs(); }
   }
-  function updateInputView() {      // 자동: 파일·붙여넣기 버튼 + (데이터가 들어온 뒤) 결과 표 / 수동: 입력 도구 + 표
-    var man = S.inMode === 'manual';
-    $('autoPane').classList.toggle('hidden', man); $('manualTools').classList.toggle('hidden', !man);
-    $('editor').classList.toggle('hidden', !man && !S.master);
-    Array.prototype.forEach.call($('inMode').children, function (x) { x.classList.toggle('on', x.dataset.in === S.inMode); });
-  }
   function renderMaster() {
     var h = '<div class="mrow h"><span>학년</span><span>반</span><span>번호</span><span>이름</span><span>구분</span><span></span></div>';
     S.rows.forEach(function (r, i) {
@@ -160,16 +154,17 @@
   }
   function readMasterFile(file) {
     var name = file.name.toLowerCase();
+    msg('subMsg', ''); $('subOk').classList.add('hidden');
     file.arrayBuffer().then(function (buf) {
-      if (/\.xlsx?$/.test(name) && typeof XLSX !== 'undefined') {
+      if (/\.xlsx?$/.test(name)) {
+        if (typeof XLSX === 'undefined') throw new Error('엑셀 읽기 라이브러리를 불러오지 못했습니다. CSV로 저장해 올려 주세요.');
         var wb0 = XLSX.read(buf, { type: 'array' });
         if (isWorkBook(wb0)) { restoreWork(wb0); return; }       // 이 앱에서 저장한 파일이면 작업 전체를 복원
         var cr0 = combinedFromWorkbook(wb0);
         if (cr0) { applyCombined(cr0); return; }                   // 학생 + 선택과목이 같이 있는 명단이면 자동 분류
-      }
-      var table = /\.xlsx?$/.test(name) ? sheetToTable(buf) : C.parseDelimited(decodeText(buf));
-      addRowsFromMaster(tableToMaster(table));
-    }).catch(function (e) { msg('masterMsg', '불러오지 못했습니다: ' + e.message); });
+        importTable(sheetToTable(buf));
+      } else importTable(C.parseDelimited(decodeText(buf)));
+    }).catch(function (e) { msg('subMsg', '불러오지 못했습니다: ' + errText(e)); });
   }
   function downloadTemplate() {
     var NOTE = [['구분은 해당하는 학생만 고르세요 (통합지원반, 별도고사실, 전출, 자퇴).'], ['구분을 고른 학생은 좌석에서 제외됩니다.'], ['학년·반은 숫자만 써도 됩니다.']];
@@ -462,24 +457,18 @@
     var keys = C.masterClassKeys(S.master).length;
     var ok = $('subOk');
     ok.textContent = '자동 분류했어요 · 학생 ' + S.master.length + '명 · 학급 ' + keys + '개 · 과목 ' + r.subjects.length + '개' +
-      (r.special ? ' · 비고의 “특수” ' + r.special + '명은 통합지원반(좌석 제외)으로 분류했어요. 수동 분류에서 바꿀 수 있어요' : '');
+      (r.special ? ' · 비고의 “특수” ' + r.special + '명은 통합지원반(좌석 제외)으로 분류했어요. 아래 표에서 바꿀 수 있어요' : '');
     ok.classList.remove('hidden');
     return true;
   }
-  function loadCombinedFile(file) {
-    msg('subMsg', ''); $('subOk').classList.add('hidden');
-    var name = file.name.toLowerCase();
-    file.arrayBuffer().then(function (buf) {
-      var r;
-      if (/\.xlsx?$/.test(name)) {
-        if (typeof XLSX === 'undefined') throw new Error('엑셀 읽기 라이브러리를 불러오지 못했습니다.');
-        r = combinedFromWorkbook(XLSX.read(buf, { type: 'array' }));
-      } else r = C.parseCombinedRoster(C.parseDelimited(decodeText(buf)));
-      if (!r) throw new Error('학생과 선택과목을 나눌 수 없습니다. 머리글에 “학번”과 “이름”이 있고 과목 열이 있어야 해요.');
-      applyCombined(r);
-    }).catch(function (e) { msg('subMsg', '불러오지 못했습니다: ' + errText(e)); });
+  /* 표(붙여넣기·CSV)가 어떤 형식인지 알아서 가른다: 이동수업 명단이면 자동 분류, 아니면 학생 명렬표 입력표에 넣는다 */
+  function importTable(table) {
+    var r = C.parseCombinedRoster(table);
+    if (r) { applyCombined(r); return; }
+    var list = tableToMaster(table);
+    addRowsFromMaster(list);
+    var ok = $('subOk'); ok.textContent = '학생 ' + list.length + '명을 표에 넣었어요. 확인하고 「명렬표 적용」을 누르세요'; ok.classList.remove('hidden');
   }
-
   function isWorkBook(wb) { return !!(wb.Sheets['선택과목'] && (wb.Sheets['학생명렬표'] || S.master)); }
   function restoreWork(wb) {
     var T = function (n) { return wb.Sheets[n] ? XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '' }) : []; };
@@ -507,7 +496,7 @@
     if (roster) {
       S.rows = roster.map(function (m) { return { grade: m.grade.replace('학년', ''), cls: m.cls.replace('반', ''), no: m.no, name: m.name, kind: m.kind }; });
       renderMaster();
-      if (!applyMaster()) throw new Error('학생 명렬표에 고칠 곳이 있습니다. 수동 분류의 안내를 확인하세요.');
+      if (!applyMaster()) throw new Error('학생 명렬표에 고칠 곳이 있습니다. 아래 표의 안내를 확인하세요.');
       $('mdet').open = true;
     } else startClass(S.classKey);
     var n = (S.subjectsBy[S.classKey] || []).length;
@@ -541,7 +530,7 @@
     S.cls = makeCls(key);
     S.pages = newPages();
     $('sWork').classList.remove('hidden'); $('sExp').classList.remove('hidden');
-    renderSubjects(); renderMaster(); renderClsTabs(); updateInputView();
+    renderSubjects(); renderMaster(); renderClsTabs();
     render();
   }
   function rebuildAll() {
@@ -885,29 +874,15 @@
     $('btnTpl').onclick = downloadTemplate;
     $('btnMasterFile').onclick = function () { $('masterFile').click(); };
     $('masterFile').onchange = function (e) { if (e.target.files[0]) readMasterFile(e.target.files[0]); e.target.value = ''; };
-    $('lnkPaste').onclick = function () { $('pasteBox').classList.toggle('hidden'); };
-    $('btnPaste').onclick = function () {
-      try { addRowsFromMaster(tableToMaster(C.parseDelimited($('paste').value))); $('paste').value = ''; $('pasteBox').classList.add('hidden'); }
-      catch (e) { msg('masterMsg', '불러오지 못했습니다: ' + e.message); }
-    };
-
-    // 선택과목 추가·학생 선택
-    $('inMode').onclick = function (e) {
-      var b = e.target.closest('[data-in]'); if (!b) return;
-      S.inMode = b.dataset.in; updateInputView();
-    };
-    $('clsTabs').onclick = function (e) { var b = e.target.closest('[data-ck]'); if (b) setViewClass(b.dataset.ck); };
-    $('btnAuto').onclick = function () { $('autoFile').click(); };
     $('btnAutoPaste').onclick = function () { $('autoBox').classList.toggle('hidden'); if (!$('autoBox').classList.contains('hidden')) $('autoText').focus(); };
     $('btnAutoGo').onclick = function () {
       msg('subMsg', ''); $('subOk').classList.add('hidden');
-      try {
-        var r = C.parseCombinedRoster(C.parseDelimited($('autoText').value));
-        if (!r) throw new Error('학생과 선택과목을 나눌 수 없습니다. 머리글(학번·이름·과목 열)부터 복사했는지 확인하세요.');
-        if (applyCombined(r)) { $('autoText').value = ''; $('autoBox').classList.add('hidden'); }
-      } catch (e) { msg('subMsg', '불러오지 못했습니다: ' + errText(e)); }
+      try { importTable(C.parseDelimited($('autoText').value)); $('autoText').value = ''; $('autoBox').classList.add('hidden'); }
+      catch (e) { msg('subMsg', '불러오지 못했습니다: ' + errText(e)); }
     };
-    $('autoFile').onchange = function (e) { if (e.target.files[0]) loadCombinedFile(e.target.files[0]); e.target.value = ''; };
+
+    // 선택과목 추가·학생 선택
+    $('clsTabs').onclick = function (e) { var b = e.target.closest('[data-ck]'); if (b) setViewClass(b.dataset.ck); };
     $('btnSave').onclick = saveWork;
     $('btnLoad').onclick = function () { $('workFile').click(); };
     $('workFile').onchange = function (e) { if (e.target.files[0]) loadWorkFile(e.target.files[0]); e.target.value = ''; };
