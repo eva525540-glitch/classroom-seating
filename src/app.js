@@ -873,6 +873,8 @@
     $('btnApply').onclick = applyMaster;
     $('btnTpl').onclick = downloadTemplate;
     $('btnMasterFile').onclick = function () { $('masterFile').click(); };
+    $('btnRosterFile').onclick = function () { $('rosterFile').click(); };
+    $('rosterFile').onchange = function (e) { if (e.target.files[0]) readMasterFile(e.target.files[0]); e.target.value = ''; };
     $('masterFile').onchange = function (e) { if (e.target.files[0]) readMasterFile(e.target.files[0]); e.target.value = ''; };
     $('btnAutoPaste').onclick = function () { $('autoBox').classList.toggle('hidden'); if (!$('autoBox').classList.contains('hidden')) $('autoText').focus(); };
     $('btnAutoGo').onclick = function () {

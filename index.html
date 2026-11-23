@@ -248,11 +248,10 @@ details[open]>summary::before{content:"▾"}
       <input id="workFile" type="file" accept=".xlsx,.xls" hidden></div>
 
     <div class="loadbar">
-      <span class="lb-t">불러오기</span>
-      <button class="sub mini tipb" id="btnMasterFile" data-tip="[이동수업 명단] 또는 학생 명렬표 엑셀·CSV 파일을 올려요.">파일 올리기</button>
+      <span class="lb-t">한번에 불러오기</span>
+      <button class="sub mini tipb" id="btnMasterFile" data-tip="[이동수업 명단] 엑셀·CSV 파일을 올려요.">파일 올리기</button>
       <button class="sub mini tipb" id="btnAutoPaste" data-tip="엑셀에서 표를 복사(Ctrl+C)해&#10;붙여넣기(Ctrl+V)해요.">표 붙여넣기</button>
-      <button class="sub mini tipb" id="btnTpl" data-tip="직접 입력용 학생 명렬표 엑셀 양식을 받아요.">양식 받기</button>
-      <span class="q wide" tabindex="0" data-tip="[반편성] - [이동수업 명단] 엑셀 파일이나 그 표를 올리면&#10;학생 명렬표와 선택과목이 자동으로 분류돼요.&#10;직접 만든 명렬표(양식)도 올릴 수 있어요.&#10;표 붙여넣기는 엑셀에서 복사(Ctrl+C)해 붙여넣기(Ctrl+V)하면 돼요.">?</span>
+      <span class="q wide" tabindex="0" data-tip="[반편성] - [이동수업 명단] 엑셀 파일이나 그 표를 올리면&#10;학생 명렬표와 선택과목을 한번에 자동으로 분류해요.&#10;표 붙여넣기는 엑셀에서 복사(Ctrl+C)해 붙여넣기(Ctrl+V)하면 돼요.">?</span>
       <input id="masterFile" type="file" accept=".xlsx,.xls,.csv" hidden>
     </div>
     <div id="autoBox" class="hidden" style="margin-top:10px">
@@ -266,7 +265,12 @@ details[open]>summary::before{content:"▾"}
       <div class="cls-tabs hidden" id="clsTabs"></div>
       <div class="subsec">
         <div class="sh2"><h3>학생 명렬표</h3>
-          <span class="q" tabindex="0" data-tip="이름과 번호는 이 표가 기준이에요.&#10;구분을 고르면 좌석에서 제외돼요.&#10;직접 입력하거나 고친 뒤에는 「명렬표 적용」을 누르세요.">?</span></div>
+          <span class="q" tabindex="0" data-tip="이름과 번호는 이 표가 기준이에요.&#10;구분을 고르면 좌석에서 제외돼요.&#10;직접 입력하거나 고친 뒤에는 「명렬표 적용」을 누르세요.">?</span>
+          <span class="tools">
+            <button class="sub mini tipb tipr" id="btnTpl" data-tip="직접 입력용 학생 명렬표 엑셀 양식을 받아요.">엑셀 양식 내려받기</button>
+            <button class="sub mini tipb tipr" id="btnRosterFile" data-tip="양식에 적은 학생 명렬표 엑셀을 표에 넣어요.">엑셀 올리기</button>
+            <input id="rosterFile" type="file" accept=".xlsx,.xls,.csv" hidden>
+          </span></div>
         <details id="mdet" open>
           <summary><span class="sumtxt">학생 입력표</span><span id="masterOk" class="okbadge hidden"></span></summary>
           <div class="mtbl" id="mtbl"></div>
@@ -365,9 +369,9 @@ details[open]>summary::before{content:"▾"}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="src/data.js?v=mwtezpur"></script>
-<script src="src/core.js?v=mwtezpur"></script>
-<script src="src/hwpx.js?v=mwtezpur"></script>
-<script src="src/app.js?v=mwtezpur"></script>
+<script src="src/data.js?v=mwtwww6c"></script>
+<script src="src/core.js?v=mwtwww6c"></script>
+<script src="src/hwpx.js?v=mwtwww6c"></script>
+<script src="src/app.js?v=mwtwww6c"></script>
 </body>
 </html>
