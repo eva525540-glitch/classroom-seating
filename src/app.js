@@ -286,10 +286,10 @@
     var defs = [
       { m: 'A', t: 'A형 (4열)', d: '4 × 6', mini: miniHtml(4, false) },
       { m: 'B', t: 'B형 (5열)', d: '5 × 6', mini: miniHtml(5, false) },
-      { m: 'manual', t: '직접 조정', d: '빈칸 4 × 6', mini: miniHtml(4, true) }
+      { m: 'manual', t: '직접 조정', d: '', mini: miniHtml(4, true) }
     ];
     $('modes').innerHTML = defs.map(function (x) {
-      return '<button class="mode' + (S.mode === x.m ? ' on' : '') + '" data-m="' + x.m + '">' + x.mini + '<span><b>' + x.t + '</b><small>' + x.d + '</small></span></button>';
+      return '<button class="mode' + (S.mode === x.m ? ' on' : '') + '" data-m="' + x.m + '">' + x.mini + '<span><b>' + x.t + '</b>' + (x.d ? '<small>' + x.d + '</small>' : '') + '</span></button>';
     }).join('');
   }
   function setMode(m) {
