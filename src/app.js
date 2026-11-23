@@ -482,7 +482,7 @@
   function seatsHtml(pg, opt) {
     var L = curLayout(), sm = slotMap(L), ci = [];
     L.grid[0].forEach(function (t, c) { if (t !== 'gap') ci.push(c); });
-    var html = '<div class="seats" style="grid-template-columns:repeat(' + ci.length + ',1fr)">';
+    var html = '<div class="seats" style="grid-template-columns:repeat(' + ci.length + ',minmax(0,1fr))">';
     L.grid.forEach(function (row, r) {
       ci.forEach(function (c) {
         var t = row[c], dc = c / 2;
@@ -496,7 +496,7 @@
           var inner = '<span class="slot">' + (i + 1) + '</span>' + hv(r, dc, no != null ? [['blank', '빈칸'], ['x', 'X']] : [['x', 'X']], opt.interactive);
           if (blocked) inner += '<span class="nm">비움</span>';
           else if (no != null) inner += '<span class="no">' + no + '</span><span class="nm">' + esc(S.cls.students[no].name) + '</span>' + (locked ? '<span class="tag">●</span>' : '');
-          html += '<div class="' + cls + '" data-slot="' + i + '"' + bg + (opt.interactive && !blocked && no != null ? ' draggable="true"' : '') + '>' + inner + '</div>';
+          html += '<div class="' + cls + '" data-slot="' + i + '"' + (no != null ? ' title="' + no + ' ' + esc(S.cls.students[no].name) + '"' : '') + bg + (opt.interactive && !blocked && no != null ? ' draggable="true"' : '') + '>' + inner + '</div>';
         }
       });
     });
