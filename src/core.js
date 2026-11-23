@@ -168,6 +168,10 @@
   function applyExclusion(page, no, nowExcluded, ctx) {
     var i = page.seats.indexOf(no);
     if (page.nos.indexOf(no) < 0) return;
+    if (ctx.manual) { // 직접 조정: 자동으로 채우지 않는다
+      if (nowExcluded) { if (i >= 0) page.seats[i] = null; page.locked = page.locked.filter(function (x) { return x !== no; }); }
+      return;
+    }
     if (page.common) { fillPage(page, null, ctx); return; }
     if (nowExcluded) {
       if (i >= 0) page.seats[i] = null;
@@ -212,6 +216,27 @@
     return page;
   }
 
+
+  /* ---------- PDF 등에서 읽은 글자 → 명렬표 행 ----------
+   * 한 줄: "2학년 3반 수학 도형탐구(3) 1 오하람 [비고]" (칸 구분선 | 은 공백으로 본다) */
+  var ROW_RE = /(\d+)\s*학년\s*(\d+)\s*반\s+(\S+)\s+(.+?\(\s*\d+\s*\))\s*(\d+)\s+([가-힣]{2,5})(?:\s+(.*))?$/;
+  function textToRoster(text) {
+    var out = [];
+    String(text).split(/\r?\n/).forEach(function (raw) {
+      var line = raw.replace(/[|｜ㅣ│¦]/g, ' ').replace(/\s+/g, ' ').trim();
+      var m = ROW_RE.exec(line);
+      if (!m) return;
+      out.push({ grade: m[1] + '학년', cls: m[2] + '반', group: m[3], subjectRaw: m[4].replace(/\s*\(\s*(\d+)\s*\)$/, '($1)'), no: parseInt(m[5], 10), name: m[6], note: (m[7] || '').trim() });
+    });
+    return out;
+  }
+  function rosterToTSV(rows) {
+    var head = ['학년', '반', '편제명', '개설과목', '번호', '성명', '비고'].join('\t');
+    return head + '\n' + rows.map(function (r) {
+      return [r.grade, r.cls, r.group, r.subjectRaw, r.no, r.name, r.note].join('\t');
+    }).join('\n');
+  }
+
   /* ---------- 제목 ---------- */
   function titleInfo(subject, oneLineMax) {
     var len = subject.length; // 과목명 글자 수
@@ -223,7 +248,7 @@
     parseDelimited: parseDelimited, rowsToRoster: rowsToRoster, parseRosterText: parseRosterText,
     stripUnit: stripUnit, classKeys: classKeys, buildClass: buildClass, isExcluded: isExcluded, noteExcluded: noteExcluded,
     newPage: newPage, pageSeed: pageSeed, fillPage: fillPage, buildPages: buildPages,
-    applyExclusion: applyExclusion, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
+    textToRoster: textToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SeatCore = api;

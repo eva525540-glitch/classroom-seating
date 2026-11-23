@@ -5,174 +5,220 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>고사 좌석배치표</title>
 <style>
-:root{--bg:#f5f6fa;--card:#fff;--ink:#1f2937;--mute:#6b7280;--pri:#2563eb;--pri-ink:#fff;--line:#d9dde7;--lock:#fde68a;--lock-line:#d4a017;--warn:#b45309;--warn-bg:#fef3c7;--bad:#b91c1c;--off:#e5e7eb}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--mute:#94a3b8;--pri:#60a5fa;--pri-ink:#0b1220;--line:#334155;--lock:#6b4e0a;--lock-line:#d4a017;--warn:#fcd34d;--warn-bg:#3b2f0b;--bad:#fca5a5;--off:#334155}}
-:root[data-theme="dark"]{--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--mute:#94a3b8;--pri:#60a5fa;--pri-ink:#0b1220;--line:#334155;--lock:#6b4e0a;--lock-line:#d4a017;--warn:#fcd34d;--warn-bg:#3b2f0b;--bad:#fca5a5;--off:#334155}
+:root{--bg:#F5F7FA;--card:#fff;--ink:#0A2540;--mute:#5b6b80;--pri:#0052CC;--acc:#00B8D9;--line:#d8dee8;--soft:#eaf1fb;--lock:#fff1c2;--lock-line:#c99700;--warn:#8a5a00;--warn-bg:#fff6dd}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;line-height:1.45}
-header{padding:16px;max-width:1200px;margin:0 auto}
-h1{margin:0;font-size:1.35rem}
-header p{margin:4px 0 0;color:var(--mute);font-size:.85rem}
-main{max-width:1200px;margin:0 auto;padding:0 16px 40px;display:grid;gap:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
-.card h2{margin:0 0 10px;font-size:1rem}
-.grid2{display:grid;gap:14px;grid-template-columns:minmax(0,340px) minmax(0,1fr)}
-@media(max-width:860px){.grid2{grid-template-columns:1fr}}
-label{display:block;font-size:.8rem;color:var(--mute);margin:8px 0 3px}
-textarea,input[type=text],input[type=number],select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
-textarea{height:110px;resize:vertical;font-size:.8rem}
-.row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
-.row>*{flex:1;min-width:0}
-button{padding:8px 12px;border:1px solid transparent;border-radius:8px;background:var(--pri);color:var(--pri-ink);font:inherit;cursor:pointer}
-button.sub{background:transparent;border-color:var(--line);color:var(--ink)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,Helvetica,"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;line-height:1.5}
+.wrap{max-width:1160px;margin:0 auto;padding:0 20px}
+header{background:#fff;border-bottom:1px solid var(--line)}
+header .wrap{display:flex;align-items:center;gap:14px;padding:18px 20px}
+.logo{width:34px;height:34px;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;flex:none}
+.logo i{background:var(--ink);display:block}.logo i:nth-child(5){background:var(--acc)}.logo i:nth-child(3){background:var(--pri)}
+h1{margin:0;font-size:1.25rem;letter-spacing:.14em;font-weight:800}
+main{padding:22px 20px 60px;max-width:1160px;margin:0 auto;display:grid;gap:18px}
+section{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:20px 22px}
+.sh{display:flex;align-items:center;gap:10px;margin:0 0 14px}
+.sh .n{font-family:ui-monospace,Consolas,monospace;font-size:.8rem;color:var(--pri);font-weight:700;letter-spacing:.1em}
+.sh h2{margin:0;font-size:1rem;letter-spacing:.1em;font-weight:800}
+.q{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:1.5px solid var(--mute);color:var(--mute);border-radius:50%;font-size:11px;font-weight:700;cursor:help;position:relative;flex:none;outline:none;background:#fff}
+.q:hover,.q:focus{border-color:var(--pri);color:var(--pri)}
+.q::after{content:attr(data-tip);display:none;position:absolute;left:50%;top:calc(100% + 8px);transform:translateX(-30%);width:max-content;max-width:260px;background:var(--ink);color:#fff;font-size:.78rem;font-weight:400;letter-spacing:0;line-height:1.5;padding:8px 10px;border-radius:3px;z-index:20;text-align:left;white-space:normal}
+.q:hover::after,.q:focus::after{display:block}
+label{display:block;font-size:.78rem;color:var(--mute);margin:0 0 4px;letter-spacing:.04em}
+input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:3px;background:#fff;color:var(--ink);font:inherit}
+input[type=number]{font-family:ui-monospace,Consolas,monospace}
+textarea{font-family:ui-monospace,Consolas,monospace;font-size:.8rem;height:200px;resize:vertical}
+button{padding:8px 14px;border:1px solid var(--pri);border-radius:3px;background:var(--pri);color:#fff;font:inherit;font-weight:600;letter-spacing:.04em;cursor:pointer}
+button:hover{filter:brightness(1.08)}
+button.sub{background:#fff;color:var(--ink);border-color:var(--line);font-weight:500}
+button.sub:hover{border-color:var(--pri);color:var(--pri);filter:none}
 button:disabled{opacity:.4;cursor:default}
-button.on{background:var(--pri);color:var(--pri-ink)}
-.btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.seg button{border-radius:0;background:transparent;color:var(--ink)}
-.seg button.on{background:var(--pri);color:var(--pri-ink)}
-.hint{font-size:.78rem;color:var(--mute)}
-.warn{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:8px 10px;font-size:.85rem;margin-top:8px}
-.warn b{color:inherit}
-table.sum{width:100%;border-collapse:collapse;font-size:.82rem}
-table.sum th,table.sum td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
-table.sum th:first-child,table.sum td:first-child{text-align:left;white-space:normal}
+.link{background:none;border:0;color:var(--pri);padding:0;font-weight:500;text-decoration:underline;text-underline-offset:3px}
+.row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.row>.g{flex:1;min-width:140px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+
+/* 업로드 */
+.drop{border:1.5px dashed #9db4d6;background:var(--soft);border-radius:4px;padding:34px 20px;text-align:center;cursor:pointer;transition:.15s}
+.drop:hover,.drop.on{border-color:var(--pri);background:#e1ecfb}
+.drop svg{display:block;margin:0 auto 10px}
+.drop b{display:block;font-size:1.02rem;letter-spacing:.04em}
+.drop span{color:var(--mute);font-size:.85rem}
+.sublinks{display:flex;gap:18px;margin-top:12px;font-size:.85rem;flex-wrap:wrap}
+.status{margin-top:12px;font-size:.88rem;color:var(--pri);font-weight:600}
+.bar{height:4px;background:var(--line);margin-top:8px;border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--pri);transition:width .2s}
+.review{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
+.warn{background:var(--warn-bg);color:var(--warn);border-left:3px solid var(--lock-line);padding:8px 12px;font-size:.85rem;margin-top:10px}
+
+/* 방식 선택 */
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:760px){.modes{grid-template-columns:1fr}}
+.mode{border:1.5px solid var(--line);border-radius:4px;padding:14px;background:#fff;cursor:pointer;text-align:left;color:var(--ink);font-weight:400;letter-spacing:0;display:flex;gap:14px;align-items:center}
+.mode:hover{border-color:var(--pri);filter:none;color:var(--ink)}
+.mode.on{border-color:var(--pri);background:var(--soft);box-shadow:inset 3px 0 0 var(--pri)}
+.mode b{display:block;font-size:1rem;letter-spacing:.06em}
+.mode small{color:var(--mute);font-size:.8rem}
+.mini{display:grid;gap:2px;flex:none}
+.mini i{width:11px;height:9px;background:var(--ink);display:block}
+.mini i.v{visibility:hidden}.mini i.x{background:none;border:1px solid var(--ink)}
+.mini.dash i{background:none;border:1px dashed var(--pri)}
+
+/* 작업 */
 .tabs{display:flex;flex-wrap:wrap;gap:6px}
-.tab{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:.85rem;cursor:pointer;background:var(--bg)}
-.tab.cur{border-color:var(--pri);outline:2px solid var(--pri);outline-offset:-2px}
-.tab.has-warn{border-color:var(--warn)}
-.tab input{margin:0}
-.paper{background:#fff;color:#111;border-radius:6px;padding:14px;border:1px solid var(--line)}
-.ttl{text-align:center;font-weight:bold;font-size:1.3rem;margin-bottom:10px}
-.ttl small{display:block;font-size:1.1rem}
+.tab{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:3px;padding:4px 10px;font-size:.84rem;cursor:pointer;background:#fff}
+.tab:hover{border-color:var(--pri)}
+.tab.cur{background:var(--ink);border-color:var(--ink);color:#fff}
+.tab.warned{border-color:var(--lock-line)}
+.tab input{margin:0;accent-color:var(--acc)}
+.work{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:18px;margin-top:16px}
+@media(max-width:900px){.work{grid-template-columns:1fr}}
+.paper{background:#fff;color:#111;border:1px solid var(--line);padding:18px 16px}
+.ttl{text-align:center;font-weight:800;font-size:1.3rem;letter-spacing:.12em;margin-bottom:12px}
+.ttl small{display:block;font-size:1.05rem;letter-spacing:.08em}
 .seats{display:grid;gap:6px;max-width:760px;margin:0 auto}
-.seat{position:relative;min-height:72px;border:2px solid #333;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;cursor:pointer;user-select:none;padding:2px;text-align:center}
-.seat .no{font-size:1.25rem;font-weight:bold;line-height:1.1}
+.seat{position:relative;min-height:74px;border:1.5px solid var(--ink);border-radius:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;cursor:pointer;user-select:none;padding:2px;text-align:center}
+.seat:hover{background:var(--soft)}
+.seat .no{font-family:ui-monospace,Consolas,monospace;font-size:1.25rem;font-weight:700;line-height:1.1}
 .seat .nm{font-size:.95rem}
-.seat .slot{position:absolute;left:3px;top:1px;font-size:.62rem;color:#888}
-.seat .tag{position:absolute;right:3px;top:1px;font-size:.7rem}
-.seat.empty{border-style:dashed;border-color:#bbb}
+.seat .slot{position:absolute;left:4px;top:2px;font-family:ui-monospace,Consolas,monospace;font-size:.6rem;color:#9aa7b8}
+.seat .tag{position:absolute;right:4px;top:2px;font-size:.7rem}
+.seat.empty{border-style:dashed;border-color:#b5c2d3}
 .seat.locked{background:var(--lock);border-color:var(--lock-line)}
-.seat.blocked{background:repeating-linear-gradient(45deg,#eee,#eee 6px,#ddd 6px,#ddd 12px);border-color:#999;color:#777}
-.seat.sel{outline:3px solid var(--pri);outline-offset:1px}
-.seat.over{outline:3px dashed var(--pri)}
+.seat.blocked{background:repeating-linear-gradient(45deg,#f1f3f6,#f1f3f6 6px,#e3e7ee 6px,#e3e7ee 12px);border-color:#a9b4c3;color:#7a8799}
+.seat.sel{outline:3px solid var(--acc);outline-offset:1px}
+.seat.over{background:#d6ecf5}
 .void{visibility:hidden}
-.xcell{border:2px solid #333;background:linear-gradient(to top right,transparent calc(50% - 1px),#333 50%,transparent calc(50% + 1px))}
-.board{max-width:760px;margin:10px auto 0;border:2px solid #333;border-radius:4px;text-align:center;padding:10px;font-size:1.2rem;font-weight:bold}
-.mini .seats{gap:2px}
-.mini .seat{min-height:26px;border-width:1px;padding:0}
-.mini .seat .no{font-size:.62rem}.mini .seat .nm{font-size:.52rem}.mini .seat .slot,.mini .seat .tag{display:none}
-.mini .ttl{font-size:.8rem;margin-bottom:4px}.mini .ttl small{font-size:.75rem}
-.mini .board{padding:2px;font-size:.6rem;margin-top:4px}
-.thumbs{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
-.thumb{cursor:pointer;border:2px solid transparent;border-radius:8px}
-.thumb.cur{border-color:var(--pri)}
-.selbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0;font-size:.85rem}
-.stulist{max-height:280px;overflow:auto;font-size:.82rem}
-.stulist label{display:flex;gap:6px;align-items:center;margin:0;padding:2px 0;color:var(--ink);font-size:.82rem}
-.stulist .nt{color:var(--mute);font-size:.75rem}
-.stulist .ex{text-decoration:line-through;color:var(--mute)}
+.xcell{border:1.5px solid var(--ink);background:linear-gradient(to top right,transparent calc(50% - 1px),var(--ink) 50%,transparent calc(50% + 1px))}
+.board{max-width:760px;margin:12px auto 0;border:1.5px solid var(--ink);text-align:center;padding:10px;font-size:1.1rem;font-weight:800;letter-spacing:.5em}
+.thumbs{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:16px}
+.thumb{cursor:pointer;border:2px solid transparent}.thumb.cur{border-color:var(--pri)}
+.thumb .paper{padding:8px}.thumb .ttl{font-size:.74rem;margin-bottom:5px}.thumb .ttl small{font-size:.7rem}
+.thumb .seats{gap:2px}.thumb .seat{min-height:22px;border-width:1px;padding:0}
+.thumb .seat .no{font-size:.58rem}.thumb .seat .nm{font-size:.5rem}.thumb .seat .slot,.thumb .seat .tag{display:none}
+.thumb .board{padding:2px;font-size:.55rem;margin-top:4px}
+.selbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px;font-size:.85rem;min-height:34px}
+.panel{border:1px solid var(--line);border-radius:3px;padding:12px;background:#fff}
+.panel+.panel{margin-top:12px}
+.panel h3{margin:0 0 8px;font-size:.82rem;letter-spacing:.08em;display:flex;align-items:center;gap:8px}
+.list{max-height:260px;overflow:auto;font-size:.84rem}
+.list label{display:flex;gap:7px;align-items:center;margin:0;padding:2px 0;color:var(--ink);font-size:.84rem;letter-spacing:0}
+.list input{accent-color:var(--pri)}
+.list .nt{color:var(--mute);font-size:.74rem}.list .ex{text-decoration:line-through;color:var(--mute)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;min-height:34px}
+.chip{border:1px solid var(--pri);color:var(--pri);padding:3px 9px;border-radius:2px;font-size:.84rem;cursor:grab;background:#fff;user-select:none}
+.chip.sel{background:var(--pri);color:#fff}
+.chip i{font-style:normal;font-family:ui-monospace,Consolas,monospace;margin-right:4px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:#fff;color:var(--ink);font-weight:500}
+.seg button.on{background:var(--ink);color:#fff}
+table.sum{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:8px}
+table.sum th,table.sum td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+table.sum th:first-child,table.sum td:first-child{text-align:left;white-space:normal}
+table.sum td{font-family:ui-monospace,Consolas,monospace}table.sum td:first-child{font-family:inherit}
+details summary{cursor:pointer;font-size:.85rem;color:var(--mute);letter-spacing:.04em}
 .hidden{display:none!important}
 #printArea{display:none}
-@media print{
-  body{background:#fff}
-  header,main{display:none!important}
-  #printArea{display:block}
-  .pp{page-break-after:always;padding:20mm 10mm}
-  .pp:last-child{page-break-after:auto}
-  .paper{border:0}
-}
+@media print{body{background:#fff}header,main{display:none!important}#printArea{display:block}.pp{page-break-after:always;padding:20mm 10mm}.pp:last-child{page-break-after:auto}.paper{border:0}}
 </style>
 </head>
 <body>
-<header>
+<header><div class="wrap">
+  <div class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <h1>고사 좌석배치표</h1>
-  <p>선택과목 명렬표를 불러오면 공통 + 과목별 좌석배치표를 만들고, 한글(.hwpx)로 내보냅니다. 모든 처리는 이 브라우저 안에서만 이루어지며 학생 정보는 어디에도 전송·저장되지 않습니다.</p>
-</header>
+</div></header>
+
 <main>
-  <div class="grid2">
-    <section class="card" id="importCard">
-      <h2>① 명렬표 불러오기</h2>
-      <label for="file">CSV(UTF-8) 또는 엑셀(.xlsx) 파일</label>
-      <input id="file" type="file" accept=".csv,.xlsx,.xls,.txt">
-      <label for="paste">또는 표를 복사해서 붙여넣기 (첫 줄: 학년, 반, 편제명, 개설과목, 번호, 성명, 비고)</label>
+  <section id="sUpload">
+    <div class="sh"><span class="n">01</span><h2>선택과목 명렬표</h2>
+      <span class="q" tabindex="0" data-tip="명렬표 PDF에서 글자를 읽어 표로 바꿉니다. 스캔본은 인식에 시간이 걸리고 틀릴 수 있어 확인 화면에서 고칠 수 있습니다. 학생 정보는 이 기기 밖으로 나가지 않습니다.">?</span></div>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="명렬표 PDF 올리기">
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="9" y="4" width="22" height="30" stroke="#0A2540" stroke-width="2"/><path d="M20 28V15m0 0l-5 5m5-5l5 5" stroke="#0052CC" stroke-width="2.2"/><rect x="9" y="34" width="22" height="2" fill="#00B8D9"/></svg>
+      <b>PDF를 끌어다 놓거나 눌러서 선택</b>
+      <span>선택과목 명렬표 (CSV·엑셀도 가능)</span>
+      <input id="file" type="file" accept=".pdf,.csv,.xlsx,.xls,.txt" hidden>
+    </div>
+    <div class="sublinks">
+      <button class="link" id="lnkPaste">표 붙여넣기</button>
+      <button class="link" id="lnkExample">예시로 해 보기</button>
+    </div>
+    <div id="pasteBox" class="hidden" style="margin-top:12px">
       <textarea id="paste" placeholder="학년&#9;반&#9;편제명&#9;개설과목&#9;번호&#9;성명&#9;비고"></textarea>
+      <div class="btns" style="margin-top:8px"><button id="btnPaste">불러오기</button></div>
+    </div>
+    <div id="status" class="status hidden"></div>
+    <div class="bar hidden" id="bar"><i id="barI"></i></div>
+    <div id="review" class="review hidden">
+      <label for="reviewTxt" style="color:var(--ink);font-weight:700">인식 결과 확인 · 틀린 곳은 직접 고치세요 <span id="reviewCnt" style="color:var(--mute);font-weight:400"></span></label>
+      <textarea id="reviewTxt"></textarea>
+      <div class="btns" style="margin-top:8px"><button id="btnReviewOk">이대로 불러오기</button><button class="sub" id="btnReviewNo">취소</button></div>
+    </div>
+    <div id="importMsg" class="warn hidden"></div>
+  </section>
+
+  <section id="sMode">
+    <div class="sh"><span class="n">02</span><h2>배치 방식</h2></div>
+    <div class="modes" id="modes"></div>
+  </section>
+
+  <section id="sWork" class="hidden">
+    <div class="sh"><span class="n">03</span><h2>좌석 확인</h2>
+      <span class="q" tabindex="0" data-tip="좌석을 끌어 놓거나 두 번 눌러 서로 바꿉니다. 칠판이 아래쪽이므로 맨 아래 행이 앞줄입니다. 비고에 통합지원반·전출·자퇴·별도고사실이 있는 학생은 좌석에서 제외됩니다.">?</span></div>
+    <div class="row" style="align-items:center">
+      <div class="g" style="flex:3"><div class="tabs" id="tabs"></div></div>
       <div class="btns">
-        <button id="btnPaste">붙여넣은 내용 불러오기</button>
-        <button class="sub" id="btnExample">예시 데이터로 해 보기</button>
-      </div>
-      <div id="importMsg" class="warn hidden"></div>
-      <div id="classPick" class="hidden">
-        <label for="clsSel">학급 선택 (한 번에 한 학급만 작업합니다)</label>
-        <select id="clsSel"></select>
-      </div>
-    </section>
-
-    <section class="card" id="setCard">
-      <h2>② 설정</h2>
-      <div class="row">
-        <div style="flex:0 0 auto"><label>좌석 배치 버전</label>
-          <div class="seg" id="layoutSeg"><button data-v="A" class="on">A 4열형</button><button data-v="B">B 5열형</button></div>
-        </div>
-        <div><label for="seed">시드(같은 시드 = 같은 배치)</label><input id="seed" type="number" value="1"></div>
-        <div style="flex:0 0 auto"><button class="sub" id="btnReseedAll" title="새 시드로 모든 과목 쪽을 다시 섞습니다(고정 학생은 제자리)">전체 다시 섞기</button></div>
-      </div>
-      <div class="row">
-        <div><label for="kw">좌석 제외 비고 키워드 (쉼표로 구분)</label><input id="kw" type="text"></div>
-        <div style="flex:0 0 auto"><label for="sortSub">과목 순서</label>
-          <select id="sortSub"><option value="appear">명렬표 등장 순</option><option value="ga">가나다 순</option></select></div>
-      </div>
-      <div class="hint" style="margin-top:6px">비고에 키워드가 들어 있는 학생은 좌석에서 뺍니다. 실제 비고 표기가 다르면 위 목록을 고치세요.</div>
-      <div id="sumWrap" style="margin-top:10px"></div>
-    </section>
-  </div>
-
-  <section class="card hidden" id="workCard">
-    <h2>③ 좌석 확인·조정</h2>
-    <div class="row" style="margin-bottom:8px">
-      <div class="tabs" id="tabs" style="flex:1"></div>
-      <div style="flex:0 0 auto" class="btns">
-        <button class="sub" id="btnUndo">↶ 되돌리기</button>
-        <button class="sub" id="btnRedo">↷ 다시 하기</button>
-        <button class="sub" id="btnView">전체 쪽 보기</button>
+        <span class="seg hidden" id="layoutSeg"><button data-v="A">A</button><button data-v="B">B</button></span>
+        <button class="sub" id="btnUndo">되돌리기</button>
+        <button class="sub" id="btnRedo">다시 하기</button>
+        <button class="sub" id="btnView">전체 보기</button>
       </div>
     </div>
     <div id="pageWarn"></div>
-
     <div id="thumbView" class="hidden"></div>
-    <div id="pageView" class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,300px)">
+    <div class="work" id="pageView">
       <div>
         <div id="paper" class="paper"></div>
         <div class="selbar" id="selbar"></div>
-        <div class="hint">좌석을 <b>드래그</b>해서 서로 바꾸거나 빈 좌석으로 옮길 수 있습니다. 터치 화면에서는 두 좌석을 차례로 눌러 교환하세요. 칠판이 아래쪽이므로 맨 아래 행이 앞줄입니다.</div>
       </div>
       <div>
-        <div class="card" style="padding:10px">
-          <div class="row">
-            <div><label for="pgSeed">이 쪽의 시드</label><input id="pgSeed" type="number"></div>
-            <div style="flex:0 0 auto"><button class="sub" id="btnReshuffle">이 쪽 다시 섞기</button></div>
+        <div class="panel" id="shufflePanel">
+          <h3>시드 <span class="q" tabindex="0" data-tip="같은 시드는 같은 배치를 만듭니다.">?</span></h3>
+          <div class="row" style="flex-wrap:nowrap">
+            <div class="g" style="min-width:0"><label for="seed">전체</label><input id="seed" type="number"></div>
+            <button class="sub" id="btnReseedAll" style="flex:none">다시 섞기</button>
           </div>
-          <div class="hint" id="pgHint" style="margin-top:6px"></div>
+          <div class="row" style="flex-wrap:nowrap;margin-top:8px">
+            <div class="g" style="min-width:0"><label for="pgSeed">이 쪽</label><input id="pgSeed" type="number"></div>
+            <button class="sub" id="btnReshuffle" style="flex:none">다시 섞기</button>
+          </div>
         </div>
-        <div class="card" style="padding:10px;margin-top:10px">
-          <b style="font-size:.9rem">학생 포함/제외</b>
-          <div class="hint">체크 = 좌석에 앉힘. 비고와 별개로 직접 바꿀 수 있습니다.</div>
-          <div class="stulist" id="stulist"></div>
+        <div class="panel hidden" id="poolPanel">
+          <h3>배치 대기 <span class="q" tabindex="0" data-tip="학생을 끌어 좌석에 놓거나, 학생을 누른 뒤 좌석을 누르세요. 좌석을 이 영역으로 끌면 자리가 비워집니다.">?</span></h3>
+          <div class="chips" id="pool"></div>
+        </div>
+        <div class="panel">
+          <h3>학생</h3>
+          <div class="list" id="stulist"></div>
+        </div>
+        <div class="panel">
+          <details><summary>선택자 집계</summary><div id="sumWrap"></div></details>
+          <div class="row" style="margin-top:10px">
+            <div class="g"><label for="clsSel" id="clsLbl">학급</label><select id="clsSel"></select></div>
+            <div class="g"><label for="sortSub">과목 순서</label><select id="sortSub"><option value="appear">등장 순</option><option value="ga">가나다 순</option></select></div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="card hidden" id="expCard">
-    <h2>④ 내보내기</h2>
-    <div class="hint">위 쪽 이름 옆 체크박스로 내보낼 쪽을 고릅니다. 체크한 순서가 아니라 위 탭의 순서대로 만들어집니다.</div>
+  <section id="sExp" class="hidden">
+    <div class="sh"><span class="n">04</span><h2>내보내기</h2>
+      <span class="q" tabindex="0" data-tip="위 탭의 체크박스로 내보낼 쪽을 고릅니다.">?</span></div>
     <div class="btns">
       <button id="btnExport">한글(.hwpx) 내보내기</button>
       <button class="sub" id="btnAll">전체 선택</button>
       <button class="sub" id="btnNone">선택 해제</button>
-      <button class="sub" id="btnPrint">인쇄 / PDF 저장</button>
+      <button class="sub" id="btnPrint">인쇄 / PDF</button>
     </div>
-    <div id="expMsg" class="hint" style="margin-top:8px"></div>
+    <div id="expMsg" style="margin-top:10px;font-size:.88rem;color:var(--pri);font-weight:600"></div>
   </section>
 </main>
 <div id="printArea"></div>
