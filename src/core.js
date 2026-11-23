@@ -69,7 +69,7 @@
   }
   function parseRosterText(text) { return rowsToRoster(parseDelimited(text)); }
 
-  function stripUnit(s) { return String(s).replace(/\(\d+\)\s*$/, '').trim(); }
+  function stripUnit(s) { return String(s).replace(/\s*[(\uFF08\[\{]\s*\d+\s*[)\uFF09\]\}]\s*$/, '').trim(); }
 
   function classKeys(roster) {
     var seen = {}, out = [];
@@ -165,6 +165,7 @@
     cls.subjects.forEach(function (sub, i) {
       var pg = newPage(sub.subject, false, allNos, pageSeed(globalSeed, i + 1));
       pg.pick = sub.nos.slice();
+      pg.expected = sub.expected == null ? null : sub.expected;
       fillPage(pg, cls, ctx);
       pages.push(pg);
     });
@@ -345,28 +346,15 @@
     }
     return 1 - prev[b.length] / Math.max(a.length, b.length);
   }
-  /* entries: [{grade, cls, subject, no, name}] (번호·이름은 틀리거나 비어 있을 수 있음) */
+  /* entries: [{grade, cls, subject, no, name}] (CSV·엑셀처럼 줄 단위로 온 경우) — 과목별로 묶어 matchPages 로 */
   function matchSelections(master, entries, classKey) {
-    var rows = master.filter(function (r) { return r.grade + '|' + r.cls === classKey; });
-    var multi = masterClassKeys(master).length > 1;
-    var order = [], map = {}, matched = 0, unmatched = 0, skipped = 0;
+    var order = [], map = {};
     entries.forEach(function (e) {
-      if (multi && e.cls) {
-        var key = (e.grade || (rows[0] && rows[0].grade) || '') + '|' + e.cls;
-        if (key !== classKey) { skipped++; return; }
-      }
-      var best = null, bestScore = 0;
-      rows.forEach(function (r) {
-        var noOk = e.no !== '' && e.no != null && Number(e.no) === r.no;
-        var score = (noOk ? 0.4 : 0) + 0.6 * jamoSim(e.name, r.name);
-        if (score > bestScore) { bestScore = score; best = r; }
-      });
-      if (!best || bestScore < 0.45) { unmatched++; return; }
-      var subj = stripUnit(e.subject || '') || '(과목 미확인)';
-      if (!map[subj]) { map[subj] = { subject: subj, raw: subj, group: '', nos: [] }; order.push(subj); }
-      if (map[subj].nos.indexOf(best.no) < 0) { map[subj].nos.push(best.no); matched++; }
+      var s = stripUnit(e.subject || '') || '(과목 미확인)';
+      if (!map[s]) { map[s] = { index: order.length + 1, grade: e.grade, cls: e.cls, subject: s, jaeok: null, rows: [] }; order.push(s); }
+      map[s].rows.push({ no: e.no, name: e.name });
     });
-    return { subjects: order.map(function (s) { return map[s]; }), matched: matched, unmatched: unmatched, skipped: skipped };
+    return matchPages(master, order.map(function (s) { return map[s]; }), classKey);
   }
   function buildClassFromMaster(master, classKey, subjects, opts) {
     opts = opts || {};
@@ -374,10 +362,153 @@
     var students = {};
     rows.forEach(function (r) { students[r.no] = { no: r.no, name: r.name, kind: r.kind || '', notes: r.kind ? [r.kind] : [] }; });
     var list = Object.keys(students).map(Number).sort(function (a, b) { return a - b; }).map(function (n) { return students[n]; });
-    var subs = (subjects || []).map(function (s) { return { subject: s.subject, raw: s.raw, group: s.group, nos: s.nos.filter(function (n) { return students[n]; }) }; });
+    var subs = (subjects || []).map(function (s) { return { subject: s.subject, raw: s.raw, group: s.group, expected: s.expected == null ? null : s.expected, nos: s.nos.filter(function (n) { return students[n]; }) }; });
     if (opts.sortSubjects === 'ga') subs.sort(function (a, b) { return a.subject.localeCompare(b.subject, 'ko'); });
     var first = rows[0] || {};
     return { key: classKey, grade: first.grade, cls: first.cls, students: students, studentList: list, subjects: subs };
+  }
+
+  /* ---------- PDF 쪽 읽기 (선택과목 명렬표는 과목×반마다 한 쪽) ----------
+   * 쪽마다: 제목(학년·과목·반), 교실재적수, 학생 줄(번호·이름 추정)을 얻는다.
+   * 과목은 쪽마다 반드시 하나 만든다(제목을 못 읽어도 "선택과목 N"). 이름은 틀려도 좋다 — 학생 명렬표와 맞춰 보며 바로잡는다. */
+  var SKIP_LINE = /성명|개설과목|편제명|교실\s*[재제]\s*적|전체\s*선택|선택\s*현황|선택자수|재적수/;
+  function parseTitle(line) {
+    if (!/선택|현황/.test(line)) return null;
+    var m = TITLE_RE.exec(line);
+    if (m) return { grade: m[1] + '학년', cls: m[4] + '반', subject: stripUnit(m[2].trim() + '(' + m[3] + ')') };
+    var body = line.replace(/\d{4}\s*학년도/, ' ').replace(/\d\s*차\s*정기\s*시험/, ' ');
+    var g = /(\d)\s*학\s*년/.exec(body), cm = /(\d+)\s*반/.exec(body);
+    if (!g) return null;
+    var after = body.slice(g.index + g[0].length), end = after.search(/(\d+\s*반|선택\s*현황|선택|현황)/);
+    var subj = stripUnit((end > 0 ? after.slice(0, end) : after).replace(/[|｜ㅣ│¦]/g, ' ').trim());
+    return { grade: g[1] + '학년', cls: cm ? cm[1] + '반' : '', subject: subj };
+  }
+  /* "전체 선택자수 / 교실재적수 / 자퇴생 / 통합지원반 / 전출생 / 별도고사실" 줄에서 교실재적수를 찾는다 */
+  function parseJaeok(lines) {
+    var LAB = /교실\s*[재제]\s*적\s*수/;
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      if (!LAB.test(l)) continue;
+      var same = /교실\s*[재제]\s*적\s*수[^0-9가-힣]{0,4}(\d{1,3})/.exec(l);
+      if (same) return parseInt(same[1], 10);
+      var names = [['전체', /전체/], ['교실', /교실/], ['자퇴', /자퇴/], ['통합', /통합/], ['전출', /전출/], ['별도', /별도/]], pos = [];
+      names.forEach(function (n) { var k = l.search(n[1]); if (k >= 0) pos.push({ n: n[0], k: k }); });
+      pos.sort(function (a, b) { return a.k - b.k; });
+      var idx = pos.map(function (p) { return p.n; }).indexOf('교실');
+      var fix = function (s) { return s.replace(/[ㅁㅇOo]/g, '0').replace(/[|ㅣlI]/g, '1'); };   // 글자 인식이 0·1을 다른 글자로 읽는 경우
+      var nums = l.match(/\d+/g) || [];
+      for (var j = i + 1; j < Math.min(lines.length, i + 4) && nums.length < 2; j++) nums = fix(lines[j]).match(/\d+/g) || [];
+      if (nums.length >= 6 && idx === 1) {              // 전체 = 교실재적수 + 자퇴 + 통합지원반 + 전출 + 별도고사실 이므로 서로 맞춰 본다
+        var v = nums.slice(0, 6).map(function (x) { return parseInt(x, 10); }), derived = v[0] - v[2] - v[3] - v[4] - v[5];
+        if (v[1] === derived) return v[1];
+        if (derived >= 0 && derived <= v[0]) return derived;
+      }
+      if (nums.length >= 2 && idx >= 0 && idx < nums.length) return parseInt(nums[idx], 10);
+    }
+    return null;
+  }
+  /* 한 줄 → {no, name, note} (칸 구분선이 사라진 글자 인식 결과도 읽는다) */
+  function lineToRow(line) {
+    var s = String(line).replace(/[|｜ㅣ│¦]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (s.length < 3) return null;
+    var strict = ROW_RE.exec(s);
+    if (strict) return { no: parseInt(strict[5], 10), name: strict[6], note: (strict[7] || '').trim(), subj: strict[4] };
+    var re = /(\d{1,2})\s?([가-힣]{2,4})(?![가-힣])/g, m, last = null;
+    while ((m = re.exec(s))) { if (m[2] !== '학년' && m[2] !== '학반' && !(m.index === 0 && m[0].indexOf(' ') < 0) && parseInt(m[1], 10) <= 60) last = m; }
+    if (last) {
+      var note = s.slice(last.index + last[0].length).split(' ').filter(function (t) { return /[가-힣]{2,}/.test(t); }).join(' ');
+      var pre = s.slice(0, last.index).trim().split(' ').filter(Boolean);
+      return { no: parseInt(last[1], 10), name: last[2], note: note, subj: pre.length >= 4 ? pre.slice(3).join(' ') : '' };
+    }
+    var toks = s.split(' ').filter(function (t) { return /^[가-힣]{2,4}$/.test(t); });
+    if (toks.length < 1 || s.split(' ').length < 3) return null;
+    var name = toks[toks.length - 1], note = '';
+    if (NOTE_RE.test(name) && toks.length > 1) { note = name; name = toks[toks.length - 2]; }
+    return { no: '', name: name, note: note };
+  }
+  /* 과목명: 제목과 각 줄의 과목 칸을 모아 서로 가장 비슷한 것(대표값)을 고른다 — 글자 인식이 몇 글자 틀려도 다수가 맞으면 바로잡힌다 */
+  function cleanSubj(s) { return stripUnit(String(s || '')).replace(/[^가-힣A-Za-z0-9 ]/g, ' ').replace(/([가-힣])\d$/, '$1').replace(/\s+/g, ' ').trim(); }
+  function consensusSubject(titleSubj, rows) {
+    var c = [];
+    rows.forEach(function (r) { var s = cleanSubj(r.subj); if (s.length >= 2) c.push(s); });
+    if (c.length < 3) { c = []; if (cleanSubj(titleSubj)) c.push(cleanSubj(titleSubj)); rows.forEach(function (r) { var s = cleanSubj(r.subj); if (s.length >= 2) c.push(s); }); }
+    if (c.length < 3) return cleanSubj(titleSubj) || c[0] || '';
+    var best = c[0], bs = -1;
+    c.forEach(function (a) {
+      var sc = 0; c.forEach(function (b) { sc += jamoSim(a, b); });
+      if (sc > bs) { bs = sc; best = a; }
+    });
+    return best;
+  }
+  function parsePdfPages(texts) {
+    return texts.map(function (tx, pi) {
+      var lines = String(tx).split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+      var title = null, rows = [];
+      lines.forEach(function (l) { if (!title) title = parseTitle(l); });
+      var jaeok = parseJaeok(lines);
+      lines.forEach(function (l) {
+        if (SKIP_LINE.test(l) || parseTitle(l)) return;
+        var r = lineToRow(l); if (r) rows.push(r);
+      });
+      var subject = consensusSubject(title ? title.subject : '', rows);
+      if (jaeok != null && rows.length && jaeok > rows.length + 1) jaeok = null;   // 글자 인식이 숫자를 잘못 읽은 경우
+      return { index: pi + 1, grade: title ? title.grade : '', cls: title ? title.cls : '', subject: subject, jaeok: jaeok, rows: rows };
+    });
+  }
+  /* 한 쪽의 줄들을 학생 명렬표(rows)의 학생에게 하나씩 짝지운다. 번호와 이름이 비슷할수록 점수가 높다. */
+  function matchPage(students, entries, jaeok) {
+    var pairs = [];
+    entries.forEach(function (e, i) {
+      students.forEach(function (r) {
+        var noOk = e.no !== '' && e.no != null && Number(e.no) === r.no;
+        var sc = (noOk ? 0.4 : 0) + 0.6 * jamoSim(e.name, r.name);
+        if (sc >= 0.25) pairs.push({ sc: sc, i: i, r: r });
+      });
+    });
+    pairs.sort(function (a, b) { return b.sc - a.sc; });
+    var usedE = {}, usedS = {}, got = [];
+    function take(p) { usedE[p.i] = 1; usedS[p.r.no] = 1; got.push(p); }
+    pairs.forEach(function (p) { if (!usedE[p.i] && !usedS[p.r.no]) take(p); });
+    if (jaeok != null) {                                   // PDF 의 교실재적수에 개수를 맞춘다
+      var ne = got.filter(function (p) { return !p.r.kind; });
+      if (ne.length > jaeok) {
+        ne.sort(function (a, b) { return a.sc - b.sc; });
+        ne.slice(0, ne.length - jaeok).forEach(function (p) { got.splice(got.indexOf(p), 1); delete usedS[p.r.no]; delete usedE[p.i]; });
+      } else if (ne.length < jaeok) {
+        var low = [];
+        entries.forEach(function (e, i) {
+          if (usedE[i]) return;
+          students.forEach(function (r) {
+            if (usedS[r.no] || r.kind) return;
+            var noOk = e.no !== '' && e.no != null && Number(e.no) === r.no;
+            low.push({ sc: (noOk ? 0.4 : 0) + 0.6 * jamoSim(e.name, r.name), i: i, r: r });
+          });
+        });
+        low.sort(function (a, b) { return b.sc - a.sc; });
+        var need = jaeok - ne.length;
+        low.forEach(function (p) { if (need > 0 && p.sc >= 0.05 && !usedE[p.i] && !usedS[p.r.no]) { take(p); need--; } });
+      }
+    }
+    return { nos: got.map(function (p) { return p.r.no; }), got: got.filter(function (p) { return !p.r.kind; }).length, unmatched: entries.length - got.length };
+  }
+  function matchPages(master, pages, classKey) {
+    var students = master.filter(function (r) { return r.grade + '|' + r.cls === classKey; });
+    var multi = masterClassKeys(master).length > 1;
+    var order = [], map = {}, matched = 0, unmatched = 0, skipped = 0;
+    pages.forEach(function (pg) {
+      if (multi && pg.cls) {
+        var key = (pg.grade || (students[0] && students[0].grade) || '') + '|' + pg.cls;
+        if (key !== classKey) { skipped++; return; }
+      }
+      var name = stripUnit(pg.subject || '') || '선택과목 ' + pg.index;
+      var res = matchPage(students, pg.rows, pg.jaeok);
+      var s = map[name];
+      if (!s) { s = map[name] = { subject: name, raw: name, group: '', nos: [], expected: null, got: 0 }; order.push(name); }
+      res.nos.forEach(function (n) { if (s.nos.indexOf(n) < 0) s.nos.push(n); });
+      if (pg.jaeok != null) s.expected = (s.expected || 0) + pg.jaeok;
+      s.got += res.got; matched += res.nos.length; unmatched += res.unmatched;
+    });
+    return { subjects: order.map(function (n) { return map[n]; }), matched: matched, unmatched: unmatched, skipped: skipped };
   }
 
   /* ---------- 직접 만드는 좌석 배치도 ----------
@@ -416,7 +547,7 @@
     parseDelimited: parseDelimited, rowsToRoster: rowsToRoster, parseRosterText: parseRosterText,
     stripUnit: stripUnit, classKeys: classKeys, buildClass: buildClass, isExcluded: isExcluded, noteExcluded: noteExcluded,
     newPage: newPage, pageSeed: pageSeed, fillPage: fillPage, buildPages: buildPages,
-    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, defaultTypes: defaultTypes, resizeTypes: resizeTypes, customLayout: customLayout, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
+    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, parseTitle: parseTitle, parseJaeok: parseJaeok, lineToRow: lineToRow, parsePdfPages: parsePdfPages, matchPage: matchPage, matchPages: matchPages, defaultTypes: defaultTypes, resizeTypes: resizeTypes, customLayout: customLayout, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SeatCore = api;

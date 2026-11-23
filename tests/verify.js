@@ -22,11 +22,23 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
   const entries = roster.map(r => ({ grade: r.grade, cls: r.cls, subject: core.stripUnit(r.subjectRaw), no: r.no, name: r.name }));
   const mres = core.matchSelections(master, entries, keys[0].key);
   assert.equal(mres.matched, 96); assert.equal(mres.unmatched, 0); assert.equal(mres.subjects.length, 12); ok('선택과목 줄 96개를 학생 명렬표와 맞춤');
-  // 틀린 이름·번호도 맞추기: 번호만 맞음 / 이름만 맞음(번호 없음) / 번호가 틀렸지만 이름이 거의 맞음
+  // 틀린 이름·번호도 맞추기: 번호만 맞음 / 이름만 맞음(번호 없음) / 이름이 한 글자 틀림(번호 없음)
   const noisy = core.matchSelections(master, [
-    { subject: '철학', no: 7, name: '신바나' }, { subject: '철학', no: '', name: '도민결' }, { subject: '철학', no: 15, name: '도민결' }, { subject: '철학', no: '', name: '' }
+    { subject: '철학', no: 7, name: '신바나' }, { subject: '철학', no: '', name: '도민결' }, { subject: '철학', no: '', name: '육하군' }
   ], keys[0].key);
-  assert.deepEqual(noisy.subjects[0].nos.slice().sort((a, b) => a - b), [7, 16]); assert.equal(noisy.unmatched, 1); ok('틀린 글자 섞인 줄도 학생 명렬표로 바로잡음');
+  assert.deepEqual(noisy.subjects[0].nos.slice().sort((a, b) => a - b), [7, 14, 16]); ok('틀린 글자 섞인 줄도 학생 명렬표로 바로잡음');
+  // PDF 쪽 읽기: 제목·교실재적수·줄, 그리고 교실재적수에 맞춰 연결 (제목을 못 읽은 쪽도 과목은 만든다)
+  const pdfTexts = [
+    ['2026학년도 2차 정기시험 2학년 철학(3) 3반 선택 현황', '전체 선택자수 교실재적수 자퇴생 통합지원반 전출생 별도고사실', '4 3 0 0 0 1', '학년 반 편제명 개설과목(단위수) 번호 성명 비고',
+      '2학년 3반 사회 철학(3) 7 신유나', '2화년 3반 사회 철학(3) 16 도민결', '2학년 3반 사회 철학(3) 21 표단우', '2학년 3반 사회 철학(3) 23 편라온 별도고사실'].join(String.fromCharCode(10)),
+    ['선택 현황 이상한 제목', '교실재적수 : 2', '1 오하람', '2 구도 [깨짐]', '3 ㅁㄴㅇ'].join(String.fromCharCode(10))
+  ];
+  const pp = core.parsePdfPages(pdfTexts);
+  assert.equal(pp[0].subject, '철학'); assert.equal(pp[0].cls, '3반'); assert.equal(pp[0].jaeok, 3); assert.equal(pp[0].rows.length, 4);
+  const pm = core.matchPages(master, pp, keys[0].key);
+  assert.equal(pm.subjects.length, 2); assert.equal(pm.subjects[0].subject, '철학'); assert.ok(/^선택과목/.test(pm.subjects[1].subject));
+  assert.equal(pm.subjects[0].got, 3); assert.equal(pm.subjects[0].expected, 3); // 별도고사실 학생은 제외 인원이라 재적수에 안 셈
+  assert.equal(pm.subjects[1].got, 2, '교실재적수 2명에 맞춤'); ok('PDF 쪽 읽기 + 교실재적수 맞추기');
   assert.equal(core.masterFromTable([['학년', '반', '번호', '이름', '구분'], ['2', '3', '1', '홍길동', '별도고사실'], ['', '', '', '', '']])[0].kind, '별도고사실'); ok('엑셀 양식 읽기');
   const cls = core.buildClassFromMaster(master, keys[0].key, mres.subjects);
   const ctx = { seatCount: 21, excluded: (no) => core.isExcluded(cls.students[no], core.DEFAULT_KEYWORDS, {}) };
