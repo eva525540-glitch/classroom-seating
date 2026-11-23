@@ -82,12 +82,13 @@
     var want = opt.slash === 'CENTER' ? 'CENTER' : 'NONE';
     var cur = (src.match(/<hh:slash type="(\w+)"/) || [0, 'NONE'])[1];
     if (cur === want && !opt.shade) return ref;
-    var key = ref + '|' + want + '|' + (opt.shade ? 1 : 0);
+    var shadeC = opt.shade ? (typeof opt.shade === 'string' ? opt.shade : SHADE_COLOR) : '';
+    var key = ref + '|' + want + '|' + shadeC;
     if (this.cache[key]) return this.cache[key];
     var id = ++this.maxId, s = src.replace('id="' + ref + '"', 'id="' + id + '"');
     s = s.replace(/<hh:slash type="\w+"/, '<hh:slash type="' + want + '"').replace(/<hh:backSlash type="\w+"/, '<hh:backSlash type="' + want + '"');
     if (opt.shade) {
-      var brush = '<hc:fillBrush><hc:winBrush faceColor="' + SHADE_COLOR + '" hatchColor="#999999" alpha="0"/></hc:fillBrush>';
+      var brush = '<hc:fillBrush><hc:winBrush faceColor="' + shadeC + '" hatchColor="#999999" alpha="0"/></hc:fillBrush>';
       if (/<hc:fillBrush>[\s\S]*?<\/hc:fillBrush>/.test(s)) s = s.replace(/<hc:fillBrush>[\s\S]*?<\/hc:fillBrush>/, brush);
       else s = s.replace('</hh:borderFill>', brush + '</hh:borderFill>');
     }
@@ -127,7 +128,7 @@
         setText(ps[1], c ? c.name : '');
       }
       var ref = tc.getAttribute('borderFillIDRef');
-      var nref = bank.get(ref, { slash: type === 'x' ? 'CENTER' : 'NONE', shade: type === 'seat' && c && c.picked });
+      var nref = bank.get(ref, { slash: type === 'x' ? 'CENTER' : 'NONE', shade: type === 'seat' && c && c.picked ? (c.color || true) : false });
       if (nref !== ref) tc.setAttribute('borderFillIDRef', nref);
     });
     return tbl;

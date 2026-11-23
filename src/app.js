@@ -39,7 +39,19 @@
   }
   function push() { /* 되돌리기 기능은 없다 */ }
   function isPicked(pg, no) { return !pg.common && !!pg.pick && pg.pick.indexOf(no) >= 0; }
-  function cellsOf(pg) { return pg.seats.map(function (no) { return no == null ? null : { no: no, name: S.cls.students[no].name, picked: isPicked(pg, no) }; }); }
+  var PAL = ['#D9ECFF', '#FFE0B8', '#D8F3DC', '#F8D7E8', '#E6DCFA', '#FFF3B0', '#CDEFF0', '#EAD7C8'];   // 과목마다 다른 색 (02의 과목 순서대로)
+  function subColor(id) { var l = (S.subjectsBy[S.classKey] || []), i = -1; l.forEach(function (x, k) { if (x.id === id) i = k; }); return PAL[(i < 0 ? 0 : i) % PAL.length]; }
+  function colorOf(pg, no) {       // 이 학생이 칠해지는 색 (선택 학생이 아니면 null). 합본은 학생이 속한 첫 과목의 색
+    if (!isPicked(pg, no)) return null;
+    if (pg.sid) return subColor(pg.sid);
+    if (pg.mid) {
+      var m = (S.mergesBy[S.classKey] || []).filter(function (q) { return q.id === pg.mid; })[0], out = null;
+      if (m) (S.subjectsBy[S.classKey] || []).forEach(function (x) { if (!out && m.ids.indexOf(x.id) >= 0 && x.nos.indexOf(no) >= 0) out = subColor(x.id); });
+      return out || PAL[0];
+    }
+    return PAL[0];
+  }
+  function cellsOf(pg) { return pg.seats.map(function (no) { return no == null ? null : { no: no, name: S.cls.students[no].name, picked: isPicked(pg, no), color: colorOf(pg, no) }; }); }
   function unseated(pg) {
     var c = ctx();
     return pg.nos.filter(function (no) { return !c.excluded(no) && pg.seats.indexOf(no) < 0; });
@@ -179,7 +191,7 @@
   function subs() { var k = S.classKey; if (!S.subjectsBy[k]) S.subjectsBy[k] = []; return S.subjectsBy[k]; }
   function merges() { var k = S.classKey; if (!S.mergesBy[k]) S.mergesBy[k] = []; return S.mergesBy[k]; }
   function subById(id) { return subs().filter(function (x) { return x.id === id; })[0]; }
-  function mergeName(m) { return m.name || m.ids.map(function (id) { var x = subById(id); return x ? x.name : ''; }).join('+'); }
+  function mergeName(m) { return m.name || m.ids.map(function (id) { var x = subById(id); return x ? x.name : ''; }).join('/'); }
   function mergeNos(m) {          // 과목 순서대로, 과목 안에서는 번호순 (겹치면 앞 과목에 둔다)
     var seen = {}, out = [];
     subs().forEach(function (x) {
@@ -282,7 +294,7 @@
         S.cls.studentList.map(function (st) {
           return '<label class="sc' + (set[st.no] ? ' on' : '') + '"><input type="checkbox" data-subpick="' + i + '" data-no="' + st.no + '"' + (set[st.no] ? ' checked' : '') + '><i>' + st.no + '</i>' + esc(st.name) + '</label>';
         }).join('') + '</div></div>' : '';
-      return '<div class="subcard' + (open ? ' open' : '') + '"><div class="subhead"><span class="idx">' + (i + 1) + '</span>' +
+      return '<div class="subcard' + (open ? ' open' : '') + '"><div class="subhead"><span class="idx" style="background:' + PAL[i % PAL.length] + '">' + (i + 1) + '</span>' +
         '<input type="text" class="subname" data-subname="' + i + '" value="' + esc(x.name) + '" aria-label="과목명">' +
         '<span class="cnt">' + x.nos.length + '명</span>' +
         '<button class="sub mini mv" data-submv="' + i + '" data-d="-1" aria-label="위로"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
@@ -338,7 +350,7 @@
   function slotMap(L) { var m = {}; L.slotOrder.forEach(function (s, i) { m[s.row + ',' + s.col] = i; }); return m; }
   function hv(r, c, kinds, on) {
     if (!on) return '';
-    return '<span class="hv">' + kinds.map(function (k) { return '<button data-cell="' + k[0] + '" data-r="' + r + '" data-c="' + c + '">' + k[1] + '</button>'; }).join('') + '</span>';
+    return '<span class="hv">' + kinds.map(function (k) { return '<button data-cell="' + k[0] + '" data-r="' + r + '" data-c="' + c + '"' + (k[0] === 'seat' ? ' title="좌석으로 되돌리기" aria-label="좌석으로 되돌리기"' : ' title="이 칸 제외(X)" aria-label="이 칸 제외(X)"') + '>' + k[1] + '</button>'; }).join('') + '</span>';
   }
   function seatsHtml(pg, opt) {
     var L = curLayout(), sm = slotMap(L), ci = [];
@@ -347,16 +359,17 @@
     L.grid.forEach(function (row, r) {
       ci.forEach(function (c) {
         var t = row[c], dc = c / 2;
-        if (t === 'void') html += '<div class="vcell">' + hv(r, dc, [['seat', '좌석으로']], opt.interactive) + '</div>';
-        else if (t === 'x') html += '<div class="xcell">' + hv(r, dc, [['seat', '좌석으로']], opt.interactive) + '</div>';
+        if (t === 'void') html += '<div class="vcell">' + hv(r, dc, [['seat', '↺']], opt.interactive) + '</div>';
+        else if (t === 'x') html += '<div class="xcell">' + hv(r, dc, [['seat', '↺']], opt.interactive) + '</div>';
         else {
           var i = sm[r + ',' + c], no = pg.seats[i], blocked = pg.blocked.indexOf(i) >= 0;
           var locked = no != null && pg.locked.indexOf(no) >= 0;
           var cls = 'seat' + (no == null && !blocked ? ' empty' : '') + (locked ? ' locked' : '') + (blocked ? ' blocked' : '') + (no != null && isPicked(pg, no) ? ' picked' : '') + (opt.sel === i ? ' sel' : '');
+          var bg = no != null && isPicked(pg, no) ? ' style="background:' + colorOf(pg, no) + '"' : '';
           var inner = '<span class="slot">' + (i + 1) + '</span>' + hv(r, dc, [['x', 'X']], opt.interactive);
           if (blocked) inner += '<span class="nm">비움</span>';
           else if (no != null) inner += '<span class="no">' + no + '</span><span class="nm">' + esc(S.cls.students[no].name) + '</span>' + (locked ? '<span class="tag">●</span>' : '');
-          html += '<div class="' + cls + '" data-slot="' + i + '"' + (opt.interactive && !blocked && no != null ? ' draggable="true"' : '') + '>' + inner + '</div>';
+          html += '<div class="' + cls + '" data-slot="' + i + '"' + bg + (opt.interactive && !blocked && no != null ? ' draggable="true"' : '') + '>' + inner + '</div>';
         }
       });
     });
@@ -432,6 +445,14 @@
       return '<div class="tab' + (i === S.cur ? ' cur' : '') + (pg.mid ? ' mg' : '') + '" data-i="' + i + '">' + esc(pg.common ? '공통' : pg.subject) + '</div>';
     }).join('');
   }
+  function legendHtml(pg) {
+    var items = [];
+    if (pg.mid) {
+      var m = merges().filter(function (q) { return q.id === pg.mid; })[0];
+      if (m) subs().forEach(function (x) { if (m.ids.indexOf(x.id) >= 0) items.push([subColor(x.id), x.name + ' 선택 학생']); });
+    } else items.push([subColor(pg.sid), pg.subject + ' 선택 학생']);
+    return '<div class="legend">' + items.map(function (q) { return '<span><i style="background:' + q[0] + '"></i>' + esc(q[1]) + '</span>'; }).join('') + '</div>';
+  }
   function renderPage() {
     var pg = S.pages[S.cur];
     $('thumbView').classList.toggle('hidden', !S.thumbs);
@@ -444,7 +465,7 @@
       }).join('') + '</div>';
       return;
     }
-    $('paper').innerHTML = paperHtml(pg, { sel: S.sel, interactive: true }) + (pg.common ? '' : '<div class="legend"><i></i>' + esc(pg.mid ? '선택 학생(과목 순서대로)' : pg.subject + ' 선택 학생') + '</div>');
+    $('paper').innerHTML = paperHtml(pg, { sel: S.sel, interactive: true }) + (pg.common ? '' : legendHtml(pg));
     var bar = '';
     if (S.sel >= 0) {
       var no = pg.seats[S.sel];
@@ -458,7 +479,7 @@
     $('namePanel').classList.toggle('hidden', pg.common); $('btnUnmerge').classList.toggle('hidden', !pg.mid); $('pgName').value = pg.subject;
     var pool = unseated(pg);
     $('poolPanel').classList.toggle('hidden', !pool.length);
-    $('pool').innerHTML = pool.map(function (n) { return '<span class="chip' + (S.selPool === n ? ' sel' : '') + (isPicked(pg, n) ? ' picked' : '') + '" draggable="true" data-pool="' + n + '"><i>' + n + '</i>' + esc(S.cls.students[n].name) + '</span>'; }).join('');
+    $('pool').innerHTML = pool.map(function (n) { return '<span class="chip' + (S.selPool === n ? ' sel' : '') + (isPicked(pg, n) ? ' picked' : '') + '"' + (isPicked(pg, n) ? ' style="background:' + colorOf(pg, n) + '"' : '') + ' draggable="true" data-pool="' + n + '"><i>' + n + '</i>' + esc(S.cls.students[n].name) + '</span>'; }).join('');
     renderStudents(pg);
   }
   function renderStudents(pg) {
