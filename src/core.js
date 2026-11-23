@@ -370,10 +370,10 @@
     var subjects = [], idx = {};
     cols.forEach(function (c2) {
       data.forEach(function (x) {
-        var nm = clean(x[c2]), st = byKey[clean(x[ci]).replace(/\D/g, '')];
+        var nm = clean(x[c2]).replace(/\s*[(（\[]\s*[가나다라마바사]\s*[)）\]]\s*$/, ''), st = byKey[clean(x[ci]).replace(/\D/g, '')];   // 물리학(가)·물리학(나)는 같은 과목
         if (!nm || !st || /^[-–—.x×]$|^없음$/i.test(nm)) return;
         if (idx[nm] == null) { idx[nm] = subjects.length; subjects.push({ name: nm, picks: [] }); }
-        subjects[idx[nm]].picks.push(st);
+        if (subjects[idx[nm]].picks.indexOf(st) < 0) subjects[idx[nm]].picks.push(st);
       });
     });
     if (!subjects.length) return null;

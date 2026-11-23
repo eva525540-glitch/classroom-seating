@@ -173,6 +173,8 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
     assert.deepEqual(r.master.map(m => m.grade + m.cls + m.no + m.kind), ['2학년1반1통합지원반', '2학년1반2', '2학년2반1별도고사실']);
     assert.deepEqual(r.subjects.map(x => x.name + ':' + x.picks.length), ['과목1:2', '과목3:2', '과목2:2']);
     assert.equal(r.special, 1);
+    const G = core.parseCombinedRoster([['학번', '이름', 'A', '반', 'B', '반'], ['20101', '가', '물리학(가)', '1', '화학', '2'], ['20102', '나', '물리학 (나)', '1', '물리학(가)', '3'], ['20103', '다', '화학(나)', '1', '', '']]);
+    assert.deepEqual(G.subjects.map(x => x.name + ':' + x.picks.length), ['물리학:2', '화학:2']);
     assert.equal(core.parseCombinedRoster([['학년', '반', '번호', '이름'], ['1', '1', '1', '가']]), null);
     ok('선택과목 명렬표 자동 분류: 학번→학년·반·번호, 과목 열만 인식, 특수→통합지원반');
   }
