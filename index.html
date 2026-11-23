@@ -194,6 +194,9 @@ button.done{background:#1f9d62;border-color:#1f9d62}
 .subsec+.subsec{border-top:1px dashed var(--line);margin-top:18px}
 .sh2{display:flex;align-items:center;gap:10px;margin:0 0 12px}
 .sh2 h3{margin:0;font-family:var(--round);font-size:1.02rem;font-weight:400;letter-spacing:.04em}
+.cls-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}
+.cls-tabs .ct{border:1px solid var(--line);background:#fff;color:var(--mute);border-radius:999px;padding:6px 18px;font-size:.92rem;cursor:pointer}
+.cls-tabs .ct.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .sh2 .tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .q.wide::after{max-width:440px;transform:translateX(-10%)}
 .sh .tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -246,9 +249,9 @@ details[open]>summary::before{content:"▾"}
 
     <div id="autoPane">
       <div class="autorow">
-        <button id="btnAuto">파일 올리기</button>
-        <button class="sub" id="btnAutoPaste">표 붙여넣기</button>
-        <span class="q wide" tabindex="0" data-tip="① 학교 시스템의 [반편성] - [이동수업 명단] 엑셀 파일을 준비하세요.&#10;② 「파일 올리기」로 올리면 학생 명렬표와 선택과목이 자동으로 분류돼요.&#10;「표 붙여넣기」는 그 표를 엑셀에서 그대로 복사(Ctrl+C)해&#10;붙여넣기(Ctrl+V)하면 돼요.&#10;③ 분류가 끝나면 바로 아래 단계로 넘어가세요.">?</span>
+        <button class="sub mini tipb" id="btnAuto" data-tip="[이동수업 명단] 엑셀 파일을 올려요.">파일 올리기</button>
+        <button class="sub mini tipb" id="btnAutoPaste" data-tip="[이동수업 명단] 표를 복사(Ctrl+C)해&#10;붙여넣기(Ctrl+V)해요.">표 붙여넣기</button>
+        <span class="q wide" tabindex="0" data-tip="① 학교 시스템의 [반편성] - [이동수업 명단] 엑셀 파일을 준비하세요.&#10;② 「파일 올리기」로 올리면 학생 명렬표와 선택과목이 자동으로 분류돼요.&#10;「표 붙여넣기」는 그 표를 엑셀에서 그대로 복사(Ctrl+C)해&#10;붙여넣기(Ctrl+V)하면 돼요.&#10;③ 분류된 결과는 아래에서 확인하고 고칠 수 있어요.">?</span>
       </div>
       <div id="autoBox" class="hidden" style="margin-top:10px">
         <textarea id="autoText" placeholder="[이동수업 명단] 표를 머리글(학번·이름·과목…)부터 복사해 붙여넣으세요"></textarea>
@@ -256,16 +259,18 @@ details[open]>summary::before{content:"▾"}
       </div>
     </div>
 
-    <div id="manualPane" class="hidden">
+    <div id="manualTools" class="autorow hidden">
+      <button class="sub mini tipb" id="btnTpl" data-tip="학생 명렬표 엑셀 양식을 내려받아요.">엑셀 양식 내려받기</button>
+      <button class="sub mini tipb" id="btnMasterFile" data-tip="양식에 적은 엑셀·CSV 파일을 올려요.">엑셀 올리기</button>
+      <button class="sub mini tipb" id="lnkPaste" data-tip="엑셀에서 학년·반·번호·이름·구분 표를 복사(Ctrl+C)해&#10;붙여넣기(Ctrl+V)하세요. 머리글은 없어도 돼요.&#10;학급이 섞여 있어도 반별로 나눠 보여요.">표 붙여넣기</button>
+      <input id="masterFile" type="file" accept=".xlsx,.xls,.csv" hidden>
+    </div>
+
+    <div id="editor" class="hidden">
+      <div class="cls-tabs hidden" id="clsTabs"></div>
       <div class="subsec">
         <div class="sh2"><h3>학생 명렬표</h3>
-          <span class="q" tabindex="0" data-tip="이름과 번호는 이 표가 기준이에요.&#10;구분을 고르면 좌석에서 제외돼요.">?</span>
-          <span class="tools">
-            <button class="sub mini" id="btnTpl">엑셀 양식 내려받기</button>
-            <button class="sub mini" id="btnMasterFile">엑셀 올리기</button>
-            <button class="link" id="lnkPaste">표 붙여넣기</button>
-            <input id="masterFile" type="file" accept=".xlsx,.xls,.csv" hidden>
-          </span></div>
+          <span class="q" tabindex="0" data-tip="이름과 번호는 이 표가 기준이에요.&#10;구분을 고르면 좌석에서 제외돼요.&#10;고친 뒤에는 「명렬표 적용」을 누르세요.">?</span></div>
         <details id="mdet" open>
           <summary><span class="sumtxt">학생 입력표</span><span id="masterOk" class="okbadge hidden"></span></summary>
           <div id="pasteBox" class="hidden" style="margin:10px 0">
@@ -368,9 +373,9 @@ details[open]>summary::before{content:"▾"}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="src/data.js?v=mwtehbkx"></script>
-<script src="src/core.js?v=mwtehbkx"></script>
-<script src="src/hwpx.js?v=mwtehbkx"></script>
-<script src="src/app.js?v=mwtehbkx"></script>
+<script src="src/data.js?v=mwterizv"></script>
+<script src="src/core.js?v=mwterizv"></script>
+<script src="src/hwpx.js?v=mwterizv"></script>
+<script src="src/app.js?v=mwterizv"></script>
 </body>
 </html>

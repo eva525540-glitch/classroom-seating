@@ -19,7 +19,7 @@
     subjectsBy: {}, mergesBy: {}, mergeOpen: false, mergeIds: [], openSub: -1,                                    // 학급별 선택과목(추가한 순서) 목록
     classKey: null, cls: null,
     mode: 'A',                                                      // 'A' 4열 | 'B' 5열 | 'manual' 직접 조정
-    types: { A: C.defaultTypes(4), B: C.defaultTypes(5), M: C.defaultTypes(4, 6) }, mcols: 4, mrows: 6, undo: [],
+    types: { A: C.defaultTypes(4), B: C.defaultTypes(5), M: C.defaultTypes(4, 6) }, mcols: 4, mrows: 6, undo: [], viewKey: null, inMode: 'auto',
     seed: 1, keywords: C.DEFAULT_KEYWORDS.slice(),
     manual: {}, pages: [], cur: 0, sel: -1, selPool: null, thumbs: false
   };
@@ -71,9 +71,39 @@
   }
 
   /* ---------- ① 학생 명렬표 입력 ---------- */
+  /* 학급 탭: 학생 입력표에 섞여 있는 학급을 반별로 나눠 본다 */
+  function rowKey(r) { return C.normGrade(r.grade) + '|' + C.normCls(r.cls); }
+  function viewKeys() {
+    var seen = {}, out = [];
+    S.rows.forEach(function (r) { if (!rowFilled(r)) return; var k = rowKey(r); if (k !== '|' && !seen[k]) { seen[k] = 1; out.push(k); } });
+    return out;
+  }
+  function inView(r) {
+    var ks = viewKeys(); if (ks.length < 2) return true;
+    if (ks.indexOf(S.viewKey) < 0) S.viewKey = ks[0];
+    var k = rowKey(r); return k === '|' || k === S.viewKey || !rowFilled(r);
+  }
+  function renderClsTabs() {
+    var ks = viewKeys(), el = $('clsTabs');
+    if (ks.indexOf(S.viewKey) < 0) S.viewKey = ks[0] || null;
+    el.classList.toggle('hidden', ks.length < 2);
+    el.innerHTML = ks.length < 2 ? '' : ks.map(function (k) { return '<button class="ct' + (k === S.viewKey ? ' on' : '') + '" data-ck="' + esc(k) + '">' + esc(k.replace('|', ' ')) + '</button>'; }).join('');
+  }
+  function setViewClass(key) {
+    S.viewKey = key;
+    if (S.master && !S.dirty && C.masterClassKeys(S.master).some(function (k) { return k.key === key; })) { $('clsSel').value = key; startClass(key); }
+    else { renderMaster(); renderClsTabs(); }
+  }
+  function updateInputView() {      // 자동: 파일·붙여넣기 버튼 + (데이터가 들어온 뒤) 결과 표 / 수동: 입력 도구 + 표
+    var man = S.inMode === 'manual';
+    $('autoPane').classList.toggle('hidden', man); $('manualTools').classList.toggle('hidden', !man);
+    $('editor').classList.toggle('hidden', !man && !S.master);
+    Array.prototype.forEach.call($('inMode').children, function (x) { x.classList.toggle('on', x.dataset.in === S.inMode); });
+  }
   function renderMaster() {
     var h = '<div class="mrow h"><span>학년</span><span>반</span><span>번호</span><span>이름</span><span>구분</span><span></span></div>';
     S.rows.forEach(function (r, i) {
+      if (!inView(r)) return;
       var g = String(r.grade || '').replace(/[^0-9]/g, '').slice(0, 1);
       h += '<div class="mrow" data-i="' + i + '">' +
         '<select data-f="grade" required aria-label="학년"><option value="" disabled hidden' + (g ? '' : ' selected') + '>1학년</option>' + [1, 2, 3].map(function (n) { return '<option value="' + n + '"' + (String(n) === g ? ' selected' : '') + '>' + n + '학년</option>'; }).join('') + '</select>' +
@@ -113,7 +143,7 @@
     var keep = S.rows.filter(rowFilled);
     S.rows = keep.concat(list.map(function (m) { return { grade: m.grade.replace('학년', ''), cls: m.cls.replace('반', ''), no: m.no, name: m.name, kind: m.kind }; }));
     if (S.rows.length < 5) S.rows = S.rows.concat(blankRows(5 - S.rows.length));
-    markDirty(); renderMaster(); msg('masterMsg', '');
+    markDirty(); renderMaster(); renderClsTabs(); msg('masterMsg', '');
   }
   function tableToMaster(table) {
     var first = (table[0] || []).map(function (h) { return String(h).trim(); });
@@ -428,6 +458,7 @@
     });
     renderMaster();
     if (!applyMaster()) return false;
+    $('mdet').open = true;
     var keys = C.masterClassKeys(S.master).length;
     var ok = $('subOk');
     ok.textContent = '자동 분류했어요 · 학생 ' + S.master.length + '명 · 학급 ' + keys + '개 · 과목 ' + r.subjects.length + '개' +
@@ -477,6 +508,7 @@
       S.rows = roster.map(function (m) { return { grade: m.grade.replace('학년', ''), cls: m.cls.replace('반', ''), no: m.no, name: m.name, kind: m.kind }; });
       renderMaster();
       if (!applyMaster()) throw new Error('학생 명렬표에 고칠 곳이 있습니다. 수동 분류의 안내를 확인하세요.');
+      $('mdet').open = true;
     } else startClass(S.classKey);
     var n = (S.subjectsBy[S.classKey] || []).length;
     var ok = $('subOk'); ok.textContent = '불러왔어요 · 과목 ' + n + '개'; ok.classList.remove('hidden');
@@ -505,11 +537,11 @@
     return pages;
   }
   function startClass(key) {
-    S.classKey = key; S.manual = {}; S.sel = -1; S.selPool = null; S.cur = 0;
+    S.classKey = key; S.viewKey = key; S.manual = {}; S.sel = -1; S.selPool = null; S.cur = 0;
     S.cls = makeCls(key);
     S.pages = newPages();
     $('sWork').classList.remove('hidden'); $('sExp').classList.remove('hidden');
-    renderSubjects();
+    renderSubjects(); renderMaster(); renderClsTabs(); updateInputView();
     render();
   }
   function rebuildAll() {
@@ -833,6 +865,7 @@
     function onEdit(e) {
       var row = e.target.closest('[data-i]'), f = e.target.dataset && e.target.dataset.f; if (!row || !f) return;
       S.rows[+row.dataset.i][f] = e.target.value; markDirty();
+      if (f === 'grade' || f === 'cls') renderClsTabs();
     }
     mt.addEventListener('input', onEdit); mt.addEventListener('change', onEdit);
     mt.addEventListener('click', function (e) {
@@ -861,10 +894,9 @@
     // 선택과목 추가·학생 선택
     $('inMode').onclick = function (e) {
       var b = e.target.closest('[data-in]'); if (!b) return;
-      var man = b.dataset.in === 'manual';
-      $('autoPane').classList.toggle('hidden', man); $('manualPane').classList.toggle('hidden', !man);
-      Array.prototype.forEach.call($('inMode').children, function (x) { x.classList.toggle('on', x === b); });
+      S.inMode = b.dataset.in; updateInputView();
     };
+    $('clsTabs').onclick = function (e) { var b = e.target.closest('[data-ck]'); if (b) setViewClass(b.dataset.ck); };
     $('btnAuto').onclick = function () { $('autoFile').click(); };
     $('btnAutoPaste').onclick = function () { $('autoBox').classList.toggle('hidden'); if (!$('autoBox').classList.contains('hidden')) $('autoText').focus(); };
     $('btnAutoGo').onclick = function () {
