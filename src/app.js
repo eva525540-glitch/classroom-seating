@@ -169,7 +169,7 @@
         else {
           var i = sm[r + ',' + c], no = pg.seats[i], blocked = pg.blocked.indexOf(i) >= 0;
           var locked = no != null && pg.locked.indexOf(no) >= 0;
-          var cls = 'seat' + (no == null && !blocked ? ' empty' : '') + (locked ? ' locked' : '') + (blocked ? ' blocked' : '') + (opt.sel === i ? ' sel' : '');
+          var cls = 'seat' + (no == null && !blocked ? ' empty' : '') + (locked ? ' locked' : '') + (blocked ? ' blocked' : '') + (no != null && !pg.common && pg.pick && pg.pick.indexOf(no) >= 0 ? ' picked' : '') + (opt.sel === i ? ' sel' : '');
           var inner = '<span class="slot">' + (i + 1) + '</span>';
           if (blocked) inner += '<span class="nm">비움</span>';
           else if (no != null) inner += '<span class="no">' + no + '</span><span class="nm">' + esc(S.cls.students[no].name) + '</span>' + (locked ? '<span class="tag">●</span>' : '');
@@ -186,18 +186,16 @@
   function paperHtml(pg, opt) { return titleHtml(pg) + seatsHtml(pg, opt) + '<div class="board">칠판</div>'; }
 
   /* ---------- 방식 카드 ---------- */
-  function miniHtml(v, dash) {
-    var L = LAYOUTS[v], ci = [];
-    L.grid[0].forEach(function (t, c) { if (t !== 'gap') ci.push(c); });
-    var h = '<div class="mini' + (dash ? ' dash' : '') + '" style="grid-template-columns:repeat(' + ci.length + ',11px)">';
-    L.grid.forEach(function (row) { ci.forEach(function (c) { var t = row[c]; h += '<i class="' + (t === 'void' ? 'v' : t === 'x' ? 'x' : '') + '"></i>'; }); });
+  function miniHtml(cols, dash) {
+    var h = '<div class="mini' + (dash ? ' dash' : '') + '" style="grid-template-columns:repeat(' + cols + ',11px)">';
+    for (var i = 0; i < cols * 6; i++) h += '<i></i>';
     return h + '</div>';
   }
   function renderModes() {
     var defs = [
-      { m: 'A', t: 'A형', d: '4열 · 자동 배치', mini: miniHtml('A', false) },
-      { m: 'B', t: 'B형', d: '5열 · 자동 배치', mini: miniHtml('B', false) },
-      { m: 'manual', t: '직접 조정', d: '빈 좌석에 직접 배치', mini: miniHtml(S.layout, true) }
+      { m: 'A', t: 'A형 (4열)', d: '4 × 6', mini: miniHtml(4, false) },
+      { m: 'B', t: 'B형 (5열)', d: '5 × 6', mini: miniHtml(5, false) },
+      { m: 'manual', t: '직접 조정', d: '빈칸 4 × 6', mini: miniHtml(4, true) }
     ];
     $('modes').innerHTML = defs.map(function (x) {
       return '<button class="mode' + (S.mode === x.m ? ' on' : '') + '" data-m="' + x.m + '">' + x.mini + '<span><b>' + x.t + '</b><small>' + x.d + '</small></span></button>';
@@ -237,7 +235,7 @@
   function renderSummary() {
     var c = ctx();
     $('sumWrap').innerHTML = '<table class="sum"><thead><tr><th>쪽</th><th>선택자</th><th>재적</th><th>제외</th></tr></thead><tbody>' + S.pages.map(function (pg) {
-      var total = pg.nos.length, ex = pg.nos.filter(function (n) { return c.excluded(n); }).length;
+      var src = pg.pick || pg.nos, total = src.length, ex = src.filter(function (n) { return c.excluded(n); }).length;
       return '<tr><td>' + esc(pg.common ? '공통' : pg.subject) + '</td><td>' + total + '</td><td>' + (total - ex) + '</td><td>' + ex + '</td></tr>';
     }).join('') + '</tbody></table>';
   }
@@ -261,7 +259,7 @@
       }).join('') + '</div>';
       return;
     }
-    $('paper').innerHTML = paperHtml(pg, { sel: S.sel, interactive: true });
+    $('paper').innerHTML = paperHtml(pg, { sel: S.sel, interactive: true }) + (pg.common ? '' : '<div class="legend"><i></i>' + esc(pg.subject) + ' 선택 학생</div>');
     var bar = '';
     if (S.sel >= 0) {
       var no = pg.seats[S.sel], blocked = pg.blocked.indexOf(S.sel) >= 0;
@@ -275,7 +273,7 @@
     $('pgSeed').value = pg.seed; $('pgSeed').disabled = pg.common; $('btnReshuffle').disabled = pg.common;
     var pool = unseated(pg);
     $('poolPanel').classList.toggle('hidden', !(man || pool.length));
-    $('pool').innerHTML = pool.map(function (n) { return '<span class="chip' + (S.selPool === n ? ' sel' : '') + '" draggable="true" data-pool="' + n + '"><i>' + n + '</i>' + esc(S.cls.students[n].name) + '</span>'; }).join('') || '<span style="color:var(--mute);font-size:.82rem">모두 배치됨</span>';
+    $('pool').innerHTML = pool.map(function (n) { return '<span class="chip' + (S.selPool === n ? ' sel' : '') + (!pg.common && pg.pick && pg.pick.indexOf(n) >= 0 ? ' picked' : '') + '" draggable="true" data-pool="' + n + '"><i>' + n + '</i>' + esc(S.cls.students[n].name) + '</span>'; }).join('') || '<span style="color:var(--mute);font-size:.82rem">모두 배치됨</span>';
     renderStudents(pg);
   }
   function renderStudents(pg) {
@@ -419,7 +417,6 @@
     drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files[0]; if (f) readFile(f); });
     $('lnkPaste').onclick = function () { $('pasteBox').classList.toggle('hidden'); };
     $('btnPaste').onclick = function () { try { loadRoster(C.parseRosterText($('paste').value)); } catch (e) { showImportMsg('불러오지 못했습니다: ' + e.message); } };
-    $('lnkExample').onclick = function () { loadRoster(C.parseRosterText(D.example)); };
     $('btnReviewOk').onclick = confirmReview;
     $('btnReviewNo').onclick = function () { $('review').classList.add('hidden'); setStatus('', null); };
 

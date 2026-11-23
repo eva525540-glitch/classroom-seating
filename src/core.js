@@ -125,8 +125,13 @@
   function fillPage(page, cls, ctx) {
     var N = ctx.seatCount;
     var candidates = page.nos.filter(function (no) { return !ctx.excluded(no); });
-    if (page.common) candidates.sort(function (a, b) { return a - b; });
-    else candidates = shuffled(candidates.sort(function (a, b) { return a - b; }), page.seed);
+    candidates.sort(function (a, b) { return a - b; });
+    if (!page.common) { // 선택한 학생 먼저(섞어서), 바로 이어서 나머지 학생
+      var pick = page.pick || [];
+      var picks = candidates.filter(function (no) { return pick.indexOf(no) >= 0; });
+      var others = candidates.filter(function (no) { return pick.indexOf(no) < 0; });
+      candidates = shuffled(picks, page.seed).concat(shuffled(others, (page.seed ^ 0x9e3779b9) >>> 0));
+    }
 
     var seats = new Array(N).fill(null);
     var blocked = page.blocked.filter(function (i) { return i < N; });
@@ -154,10 +159,12 @@
     var pages = [];
     var allNos = cls.studentList.map(function (s) { return s.no; });
     var commonPage = newPage('공통', true, allNos, 0);
+    commonPage.pick = allNos.slice();
     fillPage(commonPage, cls, ctx);
     pages.push(commonPage);
     cls.subjects.forEach(function (sub, i) {
-      var pg = newPage(sub.subject, false, sub.nos, pageSeed(globalSeed, i + 1));
+      var pg = newPage(sub.subject, false, allNos, pageSeed(globalSeed, i + 1));
+      pg.pick = sub.nos.slice();
       fillPage(pg, cls, ctx);
       pages.push(pg);
     });

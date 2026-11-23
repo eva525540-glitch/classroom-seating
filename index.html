@@ -84,11 +84,15 @@ button:disabled{opacity:.4;cursor:default}
 .seat.empty{border-style:dashed;border-color:#b5c2d3}
 .seat.locked{background:var(--lock);border-color:var(--lock-line)}
 .seat.blocked{background:repeating-linear-gradient(45deg,#f1f3f6,#f1f3f6 6px,#e3e7ee 6px,#e3e7ee 12px);border-color:#a9b4c3;color:#7a8799}
+.seat.picked{background:#d9ecff;border-color:var(--pri)}
+.seat.picked .no{color:var(--pri)}
 .seat.sel{outline:3px solid var(--acc);outline-offset:1px}
 .seat.over{background:#d6ecf5}
 .void{visibility:hidden}
 .xcell{border:1.5px solid var(--ink);background:linear-gradient(to top right,transparent calc(50% - 1px),var(--ink) 50%,transparent calc(50% + 1px))}
 .board{max-width:760px;margin:12px auto 0;border:1.5px solid var(--ink);text-align:center;padding:10px;font-size:1.1rem;font-weight:800;letter-spacing:.5em}
+.legend{max-width:760px;margin:10px auto 0;font-size:.82rem;color:#333;display:flex;align-items:center;gap:6px}
+.legend i{width:14px;height:14px;background:#d9ecff;border:1.5px solid var(--pri);display:inline-block}
 .thumbs{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:16px}
 .thumb{cursor:pointer;border:2px solid transparent}.thumb.cur{border-color:var(--pri)}
 .thumb .paper{padding:8px}.thumb .ttl{font-size:.74rem;margin-bottom:5px}.thumb .ttl small{font-size:.7rem}
@@ -105,6 +109,7 @@ button:disabled{opacity:.4;cursor:default}
 .list .nt{color:var(--mute);font-size:.74rem}.list .ex{text-decoration:line-through;color:var(--mute)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;min-height:34px}
 .chip{border:1px solid var(--pri);color:var(--pri);padding:3px 9px;border-radius:2px;font-size:.84rem;cursor:grab;background:#fff;user-select:none}
+.chip.picked{background:#d9ecff}
 .chip.sel{background:var(--pri);color:#fff}
 .chip i{font-style:normal;font-family:ui-monospace,Consolas,monospace;margin-right:4px}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:3px;overflow:hidden}
@@ -117,7 +122,7 @@ table.sum td{font-family:ui-monospace,Consolas,monospace}table.sum td:first-chil
 details summary{cursor:pointer;font-size:.85rem;color:var(--mute);letter-spacing:.04em}
 .hidden{display:none!important}
 #printArea{display:none}
-@media print{body{background:#fff}header,main{display:none!important}#printArea{display:block}.pp{page-break-after:always;padding:20mm 10mm}.pp:last-child{page-break-after:auto}.paper{border:0}}
+@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{background:#fff}header,main{display:none!important}#printArea{display:block}.pp{page-break-after:always;padding:20mm 10mm}.pp:last-child{page-break-after:auto}.paper{border:0}}
 </style>
 </head>
 <body>
@@ -138,7 +143,6 @@ details summary{cursor:pointer;font-size:.85rem;color:var(--mute);letter-spacing
     </div>
     <div class="sublinks">
       <button class="link" id="lnkPaste">표 붙여넣기</button>
-      <button class="link" id="lnkExample">예시로 해 보기</button>
     </div>
     <div id="pasteBox" class="hidden" style="margin-top:12px">
       <textarea id="paste" placeholder="학년&#9;반&#9;편제명&#9;개설과목&#9;번호&#9;성명&#9;비고"></textarea>
