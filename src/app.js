@@ -860,6 +860,15 @@
 
     // 선택과목 추가·학생 선택
     $('btnAuto').onclick = function () { $('autoFile').click(); };
+    $('btnAutoPaste').onclick = function () { $('autoBox').classList.toggle('hidden'); if (!$('autoBox').classList.contains('hidden')) $('autoText').focus(); };
+    $('btnAutoGo').onclick = function () {
+      msg('subMsg', ''); $('subOk').classList.add('hidden');
+      try {
+        var r = C.parseCombinedRoster(C.parseDelimited($('autoText').value));
+        if (!r) throw new Error('학생과 선택과목을 나눌 수 없습니다. 머리글(학번·이름·과목 열)부터 복사했는지 확인하세요.');
+        if (applyCombined(r)) { $('autoText').value = ''; $('autoBox').classList.add('hidden'); }
+      } catch (e) { msg('subMsg', '불러오지 못했습니다: ' + errText(e)); }
+    };
     $('autoFile').onchange = function (e) { if (e.target.files[0]) loadCombinedFile(e.target.files[0]); e.target.value = ''; };
     $('btnSave').onclick = saveWork;
     $('btnLoad').onclick = function () { $('workFile').click(); };
