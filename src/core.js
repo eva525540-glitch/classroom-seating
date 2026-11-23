@@ -126,11 +126,11 @@
     var N = ctx.seatCount;
     var candidates = page.nos.filter(function (no) { return !ctx.excluded(no); });
     candidates.sort(function (a, b) { return a - b; });
-    if (!page.common) { // 선택한 학생 먼저(섞어서), 바로 이어서 나머지 학생
+    if (!page.common) { // 순서는 언제나 같다: 1순위 선택과목 학생, 2순위 번호순 (선택 학생 번호순 → 이어서 나머지 학생 번호순). 무작위는 없다.
       var pick = page.pick || [];
       var picks = candidates.filter(function (no) { return pick.indexOf(no) >= 0; });
       var others = candidates.filter(function (no) { return pick.indexOf(no) < 0; });
-      candidates = shuffled(picks, page.seed).concat(shuffled(others, (page.seed ^ 0x9e3779b9) >>> 0));
+      candidates = picks.concat(others);
     }
 
     var seats = new Array(N).fill(null);
@@ -227,7 +227,7 @@
 
   /* ---------- PDF 등에서 읽은 글자 → 명렬표 행 ----------
    * 한 줄: "2학년 3반 수학 도형탐구(3) 1 오하람 [비고]" (칸 구분선 | 은 공백으로 본다) */
-  var ROW_RE = /(\d+)\s*학년\s*(\d+)\s*반\s+(\S+)\s+(.+?\(\s*\d+\s*\))\s*(\d+)\s+([가-힣]{2,5})(?:\s+(.*))?$/;
+  var ROW_RE = /(\d+)\s*학년\s*(\d+)\s*반\s+(\S+)\s+(.+?\(\s*\d+\s*\))\s*(\d+)\s+([가-힣]{2,5}|[A-Za-z][A-Za-z.'-]*(?: [A-Za-z][A-Za-z.'-]*){0,2})(?:\s+(.*))?$/;
   function textToRoster(text) {
     var out = [];
     String(text).split(/\r?\n/).forEach(function (raw) {
@@ -335,7 +335,8 @@
   }
   /* 한글 자모 단위 비슷한 정도 (0~1) — 글자 인식이 틀린 이름도 어느 정도 맞춘다 */
   function jamoSim(a, b) {
-    a = String(a || '').normalize('NFD'); b = String(b || '').normalize('NFD');
+    var nz = function (s) { return String(s || '').normalize('NFD').toLowerCase().replace(/[ .\'\-]/g, ''); };
+    a = nz(a); b = nz(b);
     if (!a.length || !b.length) return 0;
     var prev = [], cur = [], i, j;
     for (j = 0; j <= b.length; j++) prev[j] = j;
@@ -362,7 +363,7 @@
     var students = {};
     rows.forEach(function (r) { students[r.no] = { no: r.no, name: r.name, kind: r.kind || '', notes: r.kind ? [r.kind] : [] }; });
     var list = Object.keys(students).map(Number).sort(function (a, b) { return a - b; }).map(function (n) { return students[n]; });
-    var subs = (subjects || []).map(function (s) { return { subject: s.subject, raw: s.raw, group: s.group, expected: s.expected == null ? null : s.expected, nos: s.nos.filter(function (n) { return students[n]; }) }; });
+    var subs = (subjects || []).map(function (s) { return { subject: s.subject, raw: s.raw, group: s.group, expected: s.expected == null ? null : s.expected, pairs: s.pairs || [], left: s.left || [], nos: s.nos.filter(function (n) { return students[n]; }) }; });
     if (opts.sortSubjects === 'ga') subs.sort(function (a, b) { return a.subject.localeCompare(b.subject, 'ko'); });
     var first = rows[0] || {};
     return { key: classKey, grade: first.grade, cls: first.cls, students: students, studentList: list, subjects: subs };
@@ -395,7 +396,7 @@
       names.forEach(function (n) { var k = l.search(n[1]); if (k >= 0) pos.push({ n: n[0], k: k }); });
       pos.sort(function (a, b) { return a.k - b.k; });
       var idx = pos.map(function (p) { return p.n; }).indexOf('교실');
-      var fix = function (s) { return s.replace(/[ㅁㅇOo]/g, '0').replace(/[|ㅣlI]/g, '1'); };   // 글자 인식이 0·1을 다른 글자로 읽는 경우
+      var fix = function (s) { return s.replace(/[ㅁㅇOo]/g, '0').replace(/[|ㅣlI]/g, '1').replace(/B/g, '8'); };   // 글자 인식이 0·1을 다른 글자로 읽는 경우
       var nums = l.match(/\d+/g) || [];
       for (var j = i + 1; j < Math.min(lines.length, i + 4) && nums.length < 2; j++) nums = fix(lines[j]).match(/\d+/g) || [];
       if (nums.length >= 6 && idx === 1) {              // 전체 = 교실재적수 + 자퇴 + 통합지원반 + 전출 + 별도고사실 이므로 서로 맞춰 본다
@@ -403,6 +404,7 @@
         if (v[1] === derived) return v[1];
         if (derived >= 0 && derived <= v[0]) return derived;
       }
+      if (nums.length === 5 && idx === 1) return parseInt(nums[0], 10);   // 맨 앞 '전체' 숫자를 못 읽은 경우
       if (nums.length >= 2 && idx >= 0 && idx < nums.length) return parseInt(nums[idx], 10);
     }
     return null;
@@ -413,15 +415,15 @@
     if (s.length < 3) return null;
     var strict = ROW_RE.exec(s);
     if (strict) return { no: parseInt(strict[5], 10), name: strict[6], note: (strict[7] || '').trim(), subj: strict[4] };
-    var re = /(\d{1,2})\s?([가-힣]{2,4})(?![가-힣])/g, m, last = null;
+    var re = /(\d{1,2})\s?([가-힣]{2,4}|[A-Za-z][A-Za-z.'-]*(?: [A-Za-z][A-Za-z.'-]*){0,2})(?![가-힣A-Za-z])/g, m, last = null;
     while ((m = re.exec(s))) { if (m[2] !== '학년' && m[2] !== '학반' && !(m.index === 0 && m[0].indexOf(' ') < 0) && parseInt(m[1], 10) <= 60) last = m; }
     if (last) {
       var note = s.slice(last.index + last[0].length).split(' ').filter(function (t) { return /[가-힣]{2,}/.test(t); }).join(' ');
       var pre = s.slice(0, last.index).trim().split(' ').filter(Boolean);
       return { no: parseInt(last[1], 10), name: last[2], note: note, subj: pre.length >= 4 ? pre.slice(3).join(' ') : '' };
     }
-    var toks = s.split(' ').filter(function (t) { return /^[가-힣]{2,4}$/.test(t); });
-    if (toks.length < 1 || s.split(' ').length < 3) return null;
+    var toks = s.split(' ').filter(function (t) { return /^([가-힣]{2,4}|[A-Za-z][A-Za-z.'-]{1,19})$/.test(t); });
+    if (toks.length < 1 || s.split(' ').length < 4) return null;   // 번호 없는 줄은 칸이 충분히 있을 때만 학생 줄로 본다
     var name = toks[toks.length - 1], note = '';
     if (NOTE_RE.test(name) && toks.length > 1) { note = name; name = toks[toks.length - 2]; }
     return { no: '', name: name, note: note };
@@ -451,15 +453,25 @@
         var r = lineToRow(l); if (r) rows.push(r);
       });
       var subject = consensusSubject(title ? title.subject : '', rows);
-      if (jaeok != null && rows.length && jaeok > rows.length + 1) jaeok = null;   // 글자 인식이 숫자를 잘못 읽은 경우
+      if (jaeok != null && rows.length && (jaeok > rows.length + 1 || (jaeok < 1 && rows.length >= 2))) jaeok = null;   // 글자 인식이 숫자를 잘못 읽은 경우
       return { index: pi + 1, grade: title ? title.grade : '', cls: title ? title.cls : '', subject: subject, jaeok: jaeok, rows: rows };
     });
   }
   /* 한 쪽의 줄들을 학생 명렬표(rows)의 학생에게 하나씩 짝지운다. 번호와 이름이 비슷할수록 점수가 높다. */
+  /* 한글 인식 결과 쪽(kPages)에, 영어 인식 결과 쪽(ePages)에서 영어 이름 줄만 더해 합친다 */
+  function mergePageSets(kPages, ePages) {
+    return kPages.map(function (kp, i) {
+      var ep = ePages[i];
+      if (!ep) return kp;
+      var extra = ep.rows.filter(function (r) { return /^[A-Za-z]{2,}/.test(r.name || ''); }).map(function (r) { return { no: r.no, name: r.name, note: r.note, subj: '', lat: true }; });
+      return { index: kp.index, grade: kp.grade || ep.grade, cls: kp.cls || ep.cls, subject: kp.subject || ep.subject, jaeok: kp.jaeok != null ? kp.jaeok : ep.jaeok, rows: kp.rows.concat(extra) };
+    });
+  }
   function matchPage(students, entries, jaeok) {
     var pairs = [];
     entries.forEach(function (e, i) {
       students.forEach(function (r) {
+        if (e.lat && !/[A-Za-z]/.test(r.name)) return;   // 영어 글자 인식으로 읽은 줄은 영어 이름 학생과만
         var noOk = e.no !== '' && e.no != null && Number(e.no) === r.no;
         var sc = (noOk ? 0.4 : 0) + 0.6 * jamoSim(e.name, r.name);
         if (sc >= 0.25) pairs.push({ sc: sc, i: i, r: r });
@@ -469,7 +481,7 @@
     var usedE = {}, usedS = {}, got = [];
     function take(p) { usedE[p.i] = 1; usedS[p.r.no] = 1; got.push(p); }
     pairs.forEach(function (p) { if (!usedE[p.i] && !usedS[p.r.no]) take(p); });
-    if (jaeok != null) {                                   // PDF 의 교실재적수에 개수를 맞춘다
+    if (jaeok != null && jaeok >= 1) {                     // PDF 의 교실재적수에 개수를 맞춘다
       var ne = got.filter(function (p) { return !p.r.kind; });
       if (ne.length > jaeok) {
         ne.sort(function (a, b) { return a.sc - b.sc; });
@@ -489,7 +501,20 @@
         low.forEach(function (p) { if (need > 0 && p.sc >= 0.05 && !usedE[p.i] && !usedS[p.r.no]) { take(p); need--; } });
       }
     }
-    return { nos: got.map(function (p) { return p.r.no; }), got: got.filter(function (p) { return !p.r.kind; }).length, unmatched: entries.length - got.length };
+    var left = [];
+    entries.forEach(function (e, i) {
+      if (usedE[i] || e.lat) return;                    // 영어 글자 인식이 한글 줄을 읽은 쓰레기 줄은 알리지 않는다
+      var dup = got.some(function (p) {
+        var noOk = e.no !== '' && e.no != null && Number(e.no) === p.r.no;
+        return noOk || jamoSim(e.name, p.r.name) >= 0.5;
+      });
+      if (!dup) left.push({ no: e.no, name: e.name });
+    });
+    return {
+      nos: got.map(function (p) { return p.r.no; }), got: got.filter(function (p) { return !p.r.kind; }).length, unmatched: entries.length - got.length,
+      pairs: got.map(function (p) { var e = entries[p.i]; return { no: p.r.no, name: p.r.name, kind: p.r.kind || '', score: p.sc, sim: jamoSim(e.name, p.r.name), rawNo: e.no, rawName: e.name }; }),
+      left: left
+    };
   }
   function matchPages(master, pages, classKey) {
     var students = master.filter(function (r) { return r.grade + '|' + r.cls === classKey; });
@@ -503,10 +528,12 @@
       var name = stripUnit(pg.subject || '') || '선택과목 ' + pg.index;
       var res = matchPage(students, pg.rows, pg.jaeok);
       var s = map[name];
-      if (!s) { s = map[name] = { subject: name, raw: name, group: '', nos: [], expected: null, got: 0 }; order.push(name); }
+      if (!s) { s = map[name] = { subject: name, raw: name, group: '', nos: [], expected: null, got: 0, pairs: [], left: [] }; order.push(name); }
       res.nos.forEach(function (n) { if (s.nos.indexOf(n) < 0) s.nos.push(n); });
       if (pg.jaeok != null) s.expected = (s.expected || 0) + pg.jaeok;
       s.got += res.got; matched += res.nos.length; unmatched += res.unmatched;
+      res.pairs.forEach(function (q) { if (!s.pairs.some(function (z) { return z.no === q.no; })) s.pairs.push(q); });
+      s.left = s.left.concat(res.left);
     });
     return { subjects: order.map(function (n) { return map[n]; }), matched: matched, unmatched: unmatched, skipped: skipped };
   }
@@ -565,7 +592,7 @@
     parseDelimited: parseDelimited, rowsToRoster: rowsToRoster, parseRosterText: parseRosterText,
     stripUnit: stripUnit, classKeys: classKeys, buildClass: buildClass, isExcluded: isExcluded, noteExcluded: noteExcluded,
     newPage: newPage, pageSeed: pageSeed, fillPage: fillPage, buildPages: buildPages,
-    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, parseTitle: parseTitle, parseJaeok: parseJaeok, lineToRow: lineToRow, parsePdfPages: parsePdfPages, matchPage: matchPage, matchPages: matchPages, defaultTypes: defaultTypes, resizeTypes: resizeTypes, customLayout: customLayout, toTemplateLayout: toTemplateLayout, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
+    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, parseTitle: parseTitle, parseJaeok: parseJaeok, lineToRow: lineToRow, parsePdfPages: parsePdfPages, matchPage: matchPage, mergePageSets: mergePageSets, matchPages: matchPages, defaultTypes: defaultTypes, resizeTypes: resizeTypes, customLayout: customLayout, toTemplateLayout: toTemplateLayout, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SeatCore = api;

@@ -61,10 +61,23 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
   ok('모든 과목 쪽에 공통 21명 전원, 선택 학생이 먼저');
   const phil = pages.find(p => p.subject === '철학');
   assert.equal(phil.pick.filter(no => !ctx.excluded(no)).length, 3); ok('철학 선택자 3명(제외 뺀)');
-  const again = core.buildPages(cls, ctx, 12345);
-  assert.deepEqual(again.map(p => p.seats), pages.map(p => p.seats)); ok('같은 시드 → 같은 배치');
-  const other = core.buildPages(cls, ctx, 999);
-  assert.notDeepEqual(other.map(p => p.seats), pages.map(p => p.seats)); ok('다른 시드 → 다른 배치');
+  // 무작위 없음: 몇 번을 만들어도 같고, 순서는 1순위 선택과목 → 2순위 번호순
+  const again = core.buildPages(cls, ctx, 999);
+  assert.deepEqual(again.map(p => p.seats), pages.map(p => p.seats)); ok('언제 만들어도 같은 배치(무작위 없음)');
+  pages.slice(1).forEach(p => {
+    const picks = p.pick.filter(no => !ctx.excluded(no)).sort((a, b) => a - b);
+    const rest = p.nos.filter(no => !ctx.excluded(no) && !p.pick.includes(no)).sort((a, b) => a - b);
+    assert.deepEqual(p.seats.filter(x => x != null), picks.concat(rest), p.subject + ': 선택과목 먼저, 각각 번호순');
+  });
+  ok('정렬 순서: 1순위 선택과목, 2순위 번호순');
+  // 영어 이름도 읽기·맞추기
+  const enM = [{ grade: '1학년', cls: '1반', no: 1, name: 'Emily Park', kind: '' }, { grade: '1학년', cls: '1반', no: 2, name: '홍길동', kind: '' }, { grade: '1학년', cls: '1반', no: 3, name: 'Jun Seo', kind: '전출' }];
+  const enT = ['2026학년도 1학년 철학(3) 1반 선택 현황', '1학년 1반 사회 철학(3) 1 Emily Park', '1학년 1반 사회 철학(3) 2 홍길동', '1학년 1반 사회 철학(3) 3 Jun Seo 전출'].join(String.fromCharCode(10));
+  const enP = core.parsePdfPages([enT]);
+  assert.equal(enP[0].rows[0].name, 'Emily Park'); assert.equal(enP[0].rows[2].note, '전출');
+  const enMatch = core.matchPages(enM, enP, '1학년|1반');
+  assert.deepEqual(enMatch.subjects[0].nos.slice().sort(), [1, 2, 3]); assert.equal(enMatch.subjects[0].pairs.length, 3);
+  assert.ok(core.jamoSim('Emlly  Park', 'emily park') > 0.85); ok('영어 이름 읽기·맞추기');
   assert.equal(core.titleInfo('철학', 4).twoLine, false);
   assert.equal(core.titleInfo('코딩과 알고리즘', 4).twoLine, true);
   assert.equal(core.titleInfo('환경과 지속가능한 미래', 4).tooLong, false);

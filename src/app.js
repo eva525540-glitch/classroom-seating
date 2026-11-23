@@ -3,7 +3,13 @@
   'use strict';
   var C = window.SeatCore, H = window.SeatHwpx, D = window.SEAT_DATA;
   var LAYOUTS = D.layouts.layouts, ONE_MAX = D.layouts.titleOneLineMaxChars;
-  var $ = function (id) { return document.getElementById(id); };
+  /* 화면 파일(index.html)이 오래되어 요소가 없으면 오류로 멈추지 않고 알려 준다 */
+  var missing = [];
+  var $ = function (id) {
+    var el = document.getElementById(id);
+    if (!el) { missing.push(id); console.warn('화면 요소 없음: #' + id); return document.createElement('div'); }
+    return el;
+  };
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   function blankRows(n) { var a = []; for (var i = 0; i < n; i++) a.push({ grade: '', cls: '', no: '', name: '', kind: '' }); return a; }
@@ -14,9 +20,8 @@
     classKey: null, cls: null,
     mode: 'A',                                                      // 'A' 4열 | 'B' 5열 | 'manual' 직접 조정
     types: { A: C.defaultTypes(4), B: C.defaultTypes(5), M: C.defaultTypes(4, 6) }, mcols: 4, mrows: 6, pendingFile: null,
-    seed: Math.floor(Math.random() * 1e9), keywords: C.DEFAULT_KEYWORDS.slice(), sortSubjects: 'appear',
-    manual: {}, pages: [], cur: 0, sel: -1, selPool: null, thumbs: false,
-    history: [], future: []
+    seed: 1, keywords: C.DEFAULT_KEYWORDS.slice(), sortSubjects: 'appear',
+    manual: {}, pages: [], cur: 0, sel: -1, selPool: null, thumbs: false
   };
 
   /* ---------- 배치도 ---------- */
@@ -32,13 +37,7 @@
   function ctx() {
     return { seatCount: seatCount(), manual: S.mode === 'manual', excluded: function (no) { return C.isExcluded(S.cls.students[no], S.keywords, S.manual); } };
   }
-  function snapshot() { return JSON.stringify({ pages: S.pages, manual: S.manual, seed: S.seed, mode: S.mode, types: S.types, mcols: S.mcols, mrows: S.mrows }); }
-  function push() { S.history.push(snapshot()); if (S.history.length > 100) S.history.shift(); S.future = []; }
-  function restore(str) {
-    var o = JSON.parse(str);
-    S.pages = o.pages; S.manual = o.manual; S.seed = o.seed; S.mode = o.mode; S.types = o.types; S.mcols = o.mcols; S.mrows = o.mrows; S.sel = -1; S.selPool = null;
-    if (S.cur >= S.pages.length) S.cur = S.pages.length - 1;
-  }
+  function push() { /* 되돌리기 기능은 없다 */ }
   function isPicked(pg, no) { return !pg.common && !!pg.pick && pg.pick.indexOf(no) >= 0; }
   function cellsOf(pg) { return pg.seats.map(function (no) { return no == null ? null : { no: no, name: S.cls.students[no].name, picked: isPicked(pg, no) }; }); }
   function unseated(pg) {
@@ -76,9 +75,9 @@
   function renderMasterState() {
     var btn = $('btnApply'), ok = $('masterOk');
     if (S.master && !S.dirty) {
-      var ex = S.master.filter(function (m) { return m.kind; }).length, keys = C.masterClassKeys(S.master);
+      var cnt = function (k) { return S.master.filter(function (m) { return m.kind === k; }).length; }, keys = C.masterClassKeys(S.master);
       btn.textContent = '✓ 확정됨'; btn.classList.add('done');
-      ok.textContent = '이 명렬표로 확정 · ' + (keys.length === 1 ? ((keys[0].grade + ' ' + keys[0].cls).trim() + ' ') : keys.length + '개 학급 ') + S.master.length + '명' + (ex ? ' (좌석 제외 ' + ex + '명)' : '');
+      ok.textContent = (keys.length > 1 ? keys.length + '개 학급 · ' : '') + '재적: ' + S.master.length + '명 · 자퇴생: ' + cnt('자퇴') + '명 · 통합지원반: ' + cnt('통합지원반') + '명 · 전출생: ' + cnt('전출') + '명 · 별도고사실: ' + cnt('별도고사실') + '명';
       ok.classList.remove('hidden', 'dirty');
     } else {
       btn.textContent = '명렬표 적용'; btn.classList.remove('done');
@@ -250,16 +249,56 @@
       worker = await Promise.race([window.Tesseract.createWorker('kor', 1, {}), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('시간이 너무 오래 걸립니다')); }, 180000); })]);
       await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
     } catch (e) { throw new Error('스캔본 글자 인식을 준비하지 못했습니다 (' + errText(e) + '). 인터넷 연결(또는 학교 네트워크의 차단)을 확인해 주세요.'); }
-    texts = [];
+    var latin = S.master && S.master.some(function (m) { return /[A-Za-z]/.test(m.name); });   // 영어 이름이 있으면 영어도 한 번 더 읽는다
+    var worker2 = null;
+    if (latin) {
+      try {
+        worker2 = await Promise.race([window.Tesseract.createWorker('eng', 1, {}), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('시간이 너무 오래 걸립니다')); }, 180000); })]);
+        await worker2.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+      } catch (e) { worker2 = null; }
+    }
+    texts = []; var textsEn = [], steps = latin && worker2 ? 2 : 1;
     for (p = 1; p <= n; p++) {
       var page = await doc.getPage(p), vp = page.getViewport({ scale: 3 });
       var cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
       await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
-      texts.push((await worker.recognize(cleanForOcr(cv, 3))).data.text);
+      cleanForOcr(cv, 3);
+      texts.push((await worker.recognize(cv)).data.text);
+      if (worker2) textsEn.push((await worker2.recognize(cv)).data.text);
       setStatus('표를 읽는 중… ' + p + ' / ' + n, 0.3 + p / n * 0.7);
     }
     await worker.terminate();
-    return C.parsePdfPages(texts);
+    if (worker2) await worker2.terminate();
+    var pagesK = C.parsePdfPages(texts);
+    return worker2 ? C.mergePageSets(pagesK, C.parsePdfPages(textsEn)) : pagesK;
+  }
+  /* 과목별로 어떤 학생이 연결됐는지 보여 준다 — PDF에서 읽은 글자와 연결된 학생을 나란히 두고, 의심스러운 곳을 표시한다 */
+  function renderCheck() {
+    var m = S.matchInfo, el = $('chk');
+    if (!m || !m.subjects.length) { el.classList.add('hidden'); return; }
+    var issues = 0, html = '';
+    m.subjects.forEach(function (s) {
+      var pairs = (s.pairs || []).slice().sort(function (a, b) { return a.no - b.no; }), left = s.left || [];
+      var warn = pairs.filter(function (p) {            // 의심: 읽은 번호와 다른 학생에 이어졌거나, 번호 없이 이름만 비슷한 경우
+        var hasNo = p.rawNo !== '' && p.rawNo != null, noOk = hasNo && Number(p.rawNo) === p.no;
+        return !((noOk && p.sim >= 0.5) || p.sim >= 0.85);
+      });
+      var mismatch = s.expected != null && s.got !== s.expected;
+      var issue = mismatch || warn.length || left.length;
+      if (issue) issues++;
+      html += '<div class="chkcard' + (issue ? ' issue' : '') + '"><div class="chkh"><b>' + esc(s.subject) + '</b><span class="meta' + (mismatch ? ' bad' : '') + '">교실 재적 ' + s.got + '명' + (s.expected != null ? ' · PDF 교실재적수 ' + s.expected + '명' + (mismatch ? ' (다름)' : '') : '') + ' · 제외 ' + (pairs.length - s.got) + '명</span></div><div>' +
+        pairs.map(function (p) {
+          var cls = p.kind ? 'ex' : (warn.indexOf(p) >= 0 ? 'warn' : '');
+          var raw = (p.rawNo !== '' && p.rawNo != null ? p.rawNo + ' ' : '') + (p.rawName || '');
+          var diff = warn.indexOf(p) >= 0 ? '<small>읽은 글자: ' + esc(raw) + '</small>' : '';
+          return '<span class="pc ' + cls + '">' + p.no + ' ' + esc(p.name) + (p.kind ? '<small>' + esc(p.kind) + '</small>' : '') + diff + '</span>';
+        }).join('') +
+        left.map(function (l) { return '<span class="pc bad">연결 안 됨<small>읽은 글자: ' + esc(((l.no !== '' && l.no != null ? l.no + ' ' : '') + (l.name || '')).trim() || '(없음)') + '</small></span>'; }).join('') +
+        '</div></div>';
+    });
+    $('chkTitle').textContent = '과목별 읽은 결과 점검 · 과목 ' + m.subjects.length + '개' + (issues ? ' · 확인할 곳 ' + issues + '개' : ' · 이상 없음');
+    $('chkBody').innerHTML = html;
+    el.classList.remove('hidden'); el.open = issues > 0;
   }
   function renderFileInfo() {
     var f = S.fileInfo, el = $('fileInfo');
@@ -316,7 +355,7 @@
     return pages;
   }
   function startClass(key) {
-    S.classKey = key; S.manual = {}; S.history = []; S.future = []; S.sel = -1; S.selPool = null; S.cur = 0;
+    S.classKey = key; S.manual = {}; S.sel = -1; S.selPool = null; S.cur = 0;
     S.matchInfo = runMatch(key);
     S.cls = makeCls(key);
     S.pages = newPages();
@@ -328,6 +367,7 @@
       renderFileInfo();
     }
     setStatus('', null);
+    renderCheck();
     render();
   }
   function rebuildAll() {
@@ -417,7 +457,6 @@
   function render() {
     renderModes(); renderDims();
     if (!S.cls) return;
-    $('btnUndo').disabled = !S.history.length; $('btnRedo').disabled = !S.future.length;
     $('btnView').textContent = S.thumbs ? '한 쪽씩' : '전체 보기';
     renderSummary(); renderTabs(); renderPage();
   }
@@ -456,7 +495,6 @@
       bar += '<button class="sub" data-act="desel">취소</button>';
     }
     $('selbar').innerHTML = bar;
-    $('btnReshuffle').disabled = pg.common;
     $('namePanel').classList.toggle('hidden', pg.common); $('pgName').value = pg.subject;
     var ei = $('expInfo');
     if (!pg.common && pg.expected != null) {
@@ -673,7 +711,6 @@
     $('dimCols').onchange = $('dimRows').onchange = function () { setDims(+$('dimCols').value, +$('dimRows').value); };
     $('clsSel').onchange = function (e) { startClass(e.target.value); };
     $('sortSub').onchange = function (e) { S.sortSubjects = e.target.value; rebuildAll(); };
-    $('btnReshuffle').onclick = function () { var pg = cur(); if (pg.common) return; push(); C.reshuffle(pg, Math.floor(Math.random() * 1e9), ctx()); S.sel = -1; render(); };
     $('pgName').onchange = function (e) {
       var pg = cur(), v = e.target.value.trim(); if (pg.common || !v || v === pg.subject) { e.target.value = pg.subject; return; }
       push(); pg.subject = v; render();
@@ -685,8 +722,6 @@
     };
     $('thumbView').onclick = function (e) { var t = e.target.closest('[data-go]'); if (!t) return; S.cur = +t.dataset.go; S.sel = -1; S.thumbs = false; render(); };
     $('btnView').onclick = function () { S.thumbs = !S.thumbs; render(); };
-    $('btnUndo').onclick = function () { if (!S.history.length) return; S.future.push(snapshot()); restore(S.history.pop()); render(); };
-    $('btnRedo').onclick = function () { if (!S.future.length) return; S.history.push(snapshot()); restore(S.future.pop()); render(); };
 
     var paper = $('paper');
     paper.onclick = function (e) {
@@ -743,6 +778,12 @@
     $('btnExport').onclick = doExport;
   }
   bind();
+  if (missing.length) {
+    var warn = document.createElement('div');
+    warn.className = 'warn'; warn.style.margin = '12px 20px';
+    warn.textContent = '화면 파일이 새 버전과 맞지 않습니다. Ctrl+F5(강력 새로고침)를 눌러 주세요. (없는 항목: ' + missing.join(', ') + ')';
+    document.body.insertBefore(warn, document.body.firstChild);
+  }
   renderMaster();
   renderMasterState();
   renderModes();
