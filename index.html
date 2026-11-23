@@ -41,6 +41,30 @@ button:disabled{opacity:.4;cursor:default}
 .btns{display:flex;flex-wrap:wrap;gap:8px}
 
 /* 업로드 */
+.addsub{display:flex;gap:8px;flex-wrap:wrap}
+.addsub input{flex:1;min-width:180px;border-radius:999px;padding:10px 18px}
+.subcard{border:1px solid var(--line);border-radius:22px;padding:10px 14px;margin-top:10px;background:#fff}
+.subcard.open{border-color:var(--pri)}
+.subhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.subhead .idx{width:26px;height:26px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font-size:.8rem;color:var(--mute)}
+.subhead .subname{flex:1;min-width:120px;border-radius:999px;padding:6px 14px}
+.subhead .cnt{font-size:.88rem;color:var(--mute);min-width:36px;text-align:right}
+.subtools{display:flex;gap:6px;margin:10px 0 6px}
+.stuchips{display:flex;flex-wrap:wrap;gap:6px}
+.sc{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:.88rem;cursor:pointer;background:#fff}
+.sc input{display:none}
+.sc i{font-style:normal;color:var(--mute);font-size:.8rem}
+.sc.on{background:#D9ECFF;border-color:var(--pri)}
+.expzone{border-radius:22px;padding:14px 16px;margin-top:12px}
+.pickzone{border:1px solid var(--line);background:#fff}
+.gozone{background:var(--soft);border:1.5px dashed #9db4d6;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.zt{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.zb{display:flex;gap:6px}
+.eps{display:flex;flex-wrap:wrap;gap:6px}
+.ep{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 14px;font-size:.9rem;cursor:pointer;background:#fff;color:var(--mute)}
+.ep.on{background:#D9ECFF;border-color:var(--pri);color:var(--ink)}
+.ep input{display:none}
+#expMsg{font-size:.88rem;color:var(--pri)}
 .drop{border:1.5px dashed #9db4d6;background:var(--soft);border-radius:24px;padding:36px 20px;text-align:center;cursor:pointer;transition:.15s}
 .drop:hover,.drop.on{border-color:var(--pri);background:#e1ecfb}
 .drop svg{display:block;margin:0 auto 10px}
@@ -212,19 +236,11 @@ details[open]>summary::before{content:"▾"}
   </section>
 
   <section id="sUpload">
-    <div class="sh"><span class="n">02</span><h2>선택과목 명렬표</h2>
-      <span class="q" tabindex="0" data-tip="PDF를 표로 읽어 학생 명렬표와 맞춰요. 틀린 곳은 좌석 확인에서 고쳐요.">?</span></div>
-    <div class="drop" id="drop" tabindex="0" role="button" aria-label="선택과목 명렬표 올리기">
-      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="9" y="4" width="22" height="30" stroke="#0A2540" stroke-width="2"/><path d="M20 28V15m0 0l-5 5m5-5l5 5" stroke="#0052CC" stroke-width="2.2"/><rect x="9" y="34" width="22" height="2" fill="#00B8D9"/></svg>
-      <b>PDF를 끌어다 놓거나 눌러서 선택</b>
-      <span>선택과목 명렬표 (CSV·엑셀도 가능)</span>
-      <input id="file" type="file" accept=".pdf,.csv,.xlsx,.xls,.txt" hidden>
-    </div>
-    <div id="fileInfo" class="fileinfo hidden"></div>
-    <details id="chk" class="chk hidden"><summary><span id="chkTitle">과목별 읽은 결과 점검</span></summary><div id="chkBody"></div></details>
-    <div id="status" class="status hidden"></div>
-    <div class="bar hidden" id="bar"><i id="barI"></i></div>
-    <div id="importMsg" class="warn hidden"></div>
+    <div class="sh"><span class="n">02</span><h2>선택과목</h2>
+      <span class="q" tabindex="0" data-tip="공통은 자동으로 만들어져요. 과목을 추가하고 선택한 학생을 고르세요.">?</span></div>
+    <div class="addsub"><input id="subName" type="text" placeholder="과목명 (예: 물리학Ⅰ)" aria-label="과목명"><button id="btnAddSub">과목 추가</button></div>
+    <div id="subMsg" class="warn hidden"></div>
+    <div id="subList"></div>
   </section>
 
   <section id="sMode">
@@ -257,7 +273,6 @@ details[open]>summary::before{content:"▾"}
         <div class="panel" id="namePanel">
           <h3>쪽 이름</h3>
           <input id="pgName" type="text">
-          <div id="expInfo" class="expinfo hidden"></div>
         </div>
         <div class="panel hidden" id="poolPanel">
           <h3>배치 대기 <span class="q" tabindex="0" data-tip="학생을 좌석으로 끌어 놓아요. 좌석을 여기로 끌면 자리가 비워져요.">?</span></h3>
@@ -271,7 +286,6 @@ details[open]>summary::before{content:"▾"}
           <details><summary>선택자 집계</summary><div id="sumWrap"></div></details>
           <div class="row" style="margin-top:10px">
             <div class="g"><label for="clsSel" id="clsLbl">학급</label><select id="clsSel"></select></div>
-            <div class="g"><label for="sortSub">과목 순서</label><select id="sortSub"><option value="appear">등장 순</option><option value="ga">가나다 순</option></select></div>
           </div>
         </div>
       </div>
@@ -280,16 +294,22 @@ details[open]>summary::before{content:"▾"}
 
   <section id="sExp" class="hidden">
     <div class="sh"><span class="n">05</span><h2>내보내기</h2></div>
-    <div class="btns"><button id="btnExport">한글(.hwpx) 내보내기</button></div>
-    <div id="expMsg" style="margin-top:10px;font-size:.88rem;color:var(--pri)"></div>
+    <div class="expzone pickzone">
+      <div class="zt"><b>내보낼 쪽 선택</b><span class="zb"><button class="sub mini" id="btnExpAll">전체 선택</button><button class="sub mini" id="btnExpNone">전체 해제</button></span></div>
+      <div class="eps" id="expPick"></div>
+    </div>
+    <div class="expzone gozone">
+      <button id="btnExport">한글(.hwpx) 내보내기</button>
+      <div id="expMsg"></div>
+    </div>
   </section>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="src/data.js?v=mwt71cnz"></script>
-<script src="src/core.js?v=mwt71cnz"></script>
-<script src="src/hwpx.js?v=mwt71cnz"></script>
-<script src="src/app.js?v=mwt71cnz"></script>
+<script src="src/data.js?v=mwt9bt5a"></script>
+<script src="src/core.js?v=mwt9bt5a"></script>
+<script src="src/hwpx.js?v=mwt9bt5a"></script>
+<script src="src/app.js?v=mwt9bt5a"></script>
 </body>
 </html>
