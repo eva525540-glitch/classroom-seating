@@ -1,0 +1,8 @@
+*.pdf
+private/
+*.hwpx
+!templates/*.hwpx
+!examples/*.hwpx
+*.csv
+!examples/example-roster.csv
+node_modules/
