@@ -124,8 +124,8 @@ table.sum th,table.sum td{padding:5px 8px;border-bottom:1px solid var(--line);te
 table.sum th:first-child,table.sum td:first-child{text-align:left;white-space:normal;word-break:keep-all}
 table.sum td{font-variant-numeric:tabular-nums}
 details summary{cursor:pointer;font-size:.85rem;color:var(--mute);letter-spacing:.04em}
-.mtbl{border-radius:18px;border:1px solid var(--line);max-height:340px;overflow:auto;background:#fff}
-.mrow{display:grid;grid-template-columns:78px 62px 70px minmax(90px,1fr) 130px 32px;gap:6px;padding:4px 6px;border-bottom:1px solid var(--line);align-items:center}
+.mtbl{border-radius:20px;border:1px solid var(--line);max-height:380px;overflow:auto;background:#fff}
+.mrow{display:grid;grid-template-columns:104px 84px 84px minmax(110px,1fr) 150px 38px;gap:8px;padding:5px 10px;border-bottom:1px solid var(--line);align-items:center}
 .mrow.h{position:sticky;top:0;background:var(--soft);font-size:.78rem;color:var(--mute);letter-spacing:.06em;z-index:1}
 .mrow input,.mrow select{padding:5px 7px;font-size:.88rem}
 .mrow button{padding:2px 0;border-radius:999px;line-height:1;background:#fff;color:var(--mute);border-color:var(--line);font-weight:400}
@@ -147,6 +147,21 @@ button.done{background:#1f9d62;border-color:#1f9d62}
 .hv button:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
 .vcell{position:relative;border:1.5px dashed #c5cfdd;border-radius:14px;min-height:74px;background:#fafbfd}
 .xcell{position:relative;min-height:74px}
+.sh .tools{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button.mini{padding:5px 12px;font-size:.78rem}
+details>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;font-size:.88rem;color:var(--mute);padding:2px 0 8px}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"▸";color:var(--pri)}
+details[open]>summary::before{content:"▾"}
+.mrow input,.mrow select{height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-size:.9rem;width:100%;appearance:none;-webkit-appearance:none}
+.mrow select{padding-right:30px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235b6b80' stroke-width='1.6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center}
+.mrow select:invalid{color:#9aa7b8}
+.mrow input::placeholder{color:#b3bdca}
+.mrow input:focus,.mrow select:focus{outline:2px solid var(--acc);outline-offset:0}
+.dimrow{display:flex;align-items:center;gap:14px;margin-top:14px;font-family:var(--round);font-size:1rem}
+.dim{display:flex;align-items:center;gap:6px;margin:0;color:var(--ink);font-size:.95rem}
+.dim select{width:auto;padding:7px 30px 7px 16px;border-radius:999px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235b6b80' stroke-width='1.6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center}
+.dim em{font-style:normal;color:var(--mute)}
 .hidden{display:none!important}
 #printArea{display:none}
 @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{background:#fff}header,main{display:none!important}#printArea{display:block}.pp{page-break-after:always;padding:20mm 10mm}.pp:last-child{page-break-after:auto}.paper{border:0}}
@@ -161,24 +176,26 @@ button.done{background:#1f9d62;border-color:#1f9d62}
 <main>
   <section id="sMaster">
     <div class="sh"><span class="n">01</span><h2>학생 명렬표</h2>
-      <span class="q" tabindex="0" data-tip="이름과 번호는 이 표가 기준이에요. 구분을 고르면 좌석에서 제외돼요.">?</span></div>
-    <div class="btns" style="margin-bottom:12px;align-items:center">
-      <button class="sub" id="btnTpl">엑셀 양식 내려받기</button>
-      <button class="sub" id="btnMasterFile">엑셀 올리기</button>
-      <input id="masterFile" type="file" accept=".xlsx,.xls,.csv" hidden>
-      <button class="link" id="lnkPaste">표 붙여넣기</button>
-    </div>
-    <div id="pasteBox" class="hidden" style="margin-bottom:12px">
-      <textarea id="paste" placeholder="학년&#9;반&#9;번호&#9;이름&#9;구분"></textarea>
-      <div class="btns" style="margin-top:8px"><button class="sub" id="btnPaste">표에 넣기</button></div>
-    </div>
-    <div class="mtbl" id="mtbl"></div>
-    <div class="btns" style="margin-top:10px">
-      <button class="sub" id="btnAddRow">행 추가</button>
-      <button id="btnApply">명렬표 적용</button>
-      <span id="masterOk" class="okbadge hidden"></span>
-    </div>
-    <div id="masterMsg" class="warn hidden"></div>
+      <span class="q" tabindex="0" data-tip="이름과 번호는 이 표가 기준이에요. 구분을 고르면 좌석에서 제외돼요.">?</span>
+      <span class="tools">
+        <button class="sub mini" id="btnTpl">엑셀 양식 내려받기</button>
+        <button class="sub mini" id="btnMasterFile">엑셀 올리기</button>
+        <button class="link" id="lnkPaste">표 붙여넣기</button>
+        <input id="masterFile" type="file" accept=".xlsx,.xls,.csv" hidden>
+      </span></div>
+    <details id="mdet" open>
+      <summary><span class="sumtxt">학생 입력표</span><span id="masterOk" class="okbadge hidden"></span></summary>
+      <div id="pasteBox" class="hidden" style="margin:10px 0">
+        <textarea id="paste" placeholder="학년&#9;반&#9;번호&#9;이름&#9;구분"></textarea>
+        <div class="btns" style="margin-top:8px"><button class="sub" id="btnPaste">표에 넣기</button></div>
+      </div>
+      <div class="mtbl" id="mtbl"></div>
+      <div class="btns" style="margin-top:10px">
+        <button class="sub" id="btnAddRow">행 추가</button>
+        <button id="btnApply">명렬표 적용</button>
+      </div>
+      <div id="masterMsg" class="warn hidden"></div>
+    </details>
   </section>
 
   <section id="sUpload">
@@ -199,6 +216,11 @@ button.done{background:#1f9d62;border-color:#1f9d62}
   <section id="sMode">
     <div class="sh"><span class="n">03</span><h2>배치 방식</h2></div>
     <div class="modes" id="modes"></div>
+    <div id="dimBox" class="dimrow hidden">
+      <span>직접 조정</span>
+      <label class="dim"><select id="dimCols" aria-label="열 수"></select><em>열</em></label>
+      <label class="dim"><select id="dimRows" aria-label="행 수"></select><em>행</em></label>
+    </div>
   </section>
 
   <section id="sWork" class="hidden">
@@ -207,7 +229,6 @@ button.done{background:#1f9d62;border-color:#1f9d62}
     <div class="row" style="align-items:center">
       <div class="g" style="flex:3"><div class="tabs" id="tabs"></div></div>
       <div class="btns">
-        <span class="seg hidden" id="layoutSeg"><button data-v="4">4열</button><button data-v="5">5열</button></span>
         <button class="sub" id="btnReshuffle">다시 섞기</button>
         <button class="sub" id="btnUndo">되돌리기</button>
         <button class="sub" id="btnRedo">다시 하기</button>

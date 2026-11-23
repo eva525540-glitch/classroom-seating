@@ -165,6 +165,18 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
     assert.ok(!/<hh:slash type="CENTER"/.test(fillOf(nat)));
     ok('직접 만든 배치도 ' + cols + '열: X·빈칸·좌석·색이 hwpx에 반영, 모든 쪽 동일');
   }
+  // 직접 조정: 열·행 수를 먼저 고르기 (3열 × 4행) → 양식 크기(6행 × 4열)의 오른쪽 아래에 놓이고 나머지는 빈칸
+  {
+    const ty = core.defaultTypes(3, 4); ty[1][1] = 'x';
+    const L = core.customLayout(3, ty, 360), T = core.toTemplateLayout(L, 4);
+    assert.equal(L.rowCnt, 4); assert.equal(L.seatCount, 11); assert.equal(T.rowCnt, 6); assert.equal(T.colCnt, 7);
+    assert.deepEqual(T.slotOrder[0], { slot: 1, col: 6, row: 5 });
+    const cellsD = Array.from({ length: L.seatCount }, (_, i) => ({ no: i + 1, name: '이름' + (i + 1), picked: false }));
+    const od = await hw.buildHwpx({ JSZip, DOMParser, XMLSerializer }, fs.readFileSync(path.join(root, 'templates/seat-template-A.hwpx')), T, [{ subject: '철학', cells: cellsD }], { previewPng: PNG });
+    const sd = await (await JSZip.loadAsync(od)).file('Contents/section0.xml').async('string');
+    const nums = [...sd.matchAll(/<hp:t>(\d+)<\/hp:t>/g)].map(m => +m[1]);
+    assert.equal(nums.length, 11); assert.deepEqual(nums.slice().sort((a, b) => a - b), cellsD.map(c => c.no)); ok('열·행 수를 고른 배치도를 양식 크기로 변환(남는 칸은 비움)');
+  }
   // 첫 쪽이 두 줄형일 때 (공통 제외)
   const L = layouts.A, tpl = fs.readFileSync(path.join(root, 'templates/seat-template-A.hwpx'));
   const p2 = [{ subject: '코딩과 알고리즘', cells: new Array(21).fill(null) }, { subject: '철학', cells: new Array(21).fill(null) }];

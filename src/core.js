@@ -515,25 +515,43 @@
    * types[행 0~5][열] = 'seat'(좌석) | 'blank'(빈칸) | 'x'(책상 없음, 대각선)
    * 기본은 모든 칸이 좌석(열마다 6석). 슬롯 순서는 양식과 같다:
    * 맨 오른쪽 열의 맨 아래(칠판 쪽)부터 위로, 열 끝에 닿으면 바로 왼쪽 열의 맨 아래로. 빈칸·X는 건너뛴다. */
-  function defaultTypes(cols) {
+  function defaultTypes(cols, rows) {
+    rows = rows || 6;
     var t = [];
-    for (var r = 0; r < 6; r++) { var row = []; for (var c = 0; c < cols; c++) row.push('seat'); t.push(row); }
+    for (var r = 0; r < rows; r++) { var row = []; for (var c = 0; c < cols; c++) row.push('seat'); t.push(row); }
     return t;
   }
-  function resizeTypes(types, cols) {
-    var t = defaultTypes(cols);
-    for (var r = 0; r < 6; r++) for (var c = 0; c < cols; c++) if (types[r] && types[r][c]) t[r][c] = types[r][c];
+  /* 크기를 바꿀 때는 오른쪽 아래(앞줄·칠판 쪽)를 기준으로 기존 칸을 유지한다 */
+  function resizeTypes(types, cols, rows) {
+    rows = rows || types.length;
+    var oR = types.length, oC = types[0] ? types[0].length : 0, t = defaultTypes(cols, rows);
+    for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+      var rr = r - (rows - oR), cc = c - (cols - oC);
+      if (rr >= 0 && cc >= 0 && types[rr] && types[rr][cc]) t[r][c] = types[rr][cc];
+    }
     return t;
   }
   function customLayout(cols, types, shift) {
-    var grid = [], so = [], r, c;
-    for (r = 0; r < 6; r++) {
+    var rows = types.length, grid = [], so = [], r, c;
+    for (r = 0; r < rows; r++) {
       var row = [];
       for (c = 0; c < cols; c++) { if (c) row.push('gap'); var t = types[r][c]; row.push(t === 'seat' ? 'seat' : t === 'x' ? 'x' : 'void'); }
       grid.push(row);
     }
-    for (c = cols - 1; c >= 0; c--) for (r = 5; r >= 0; r--) if (types[r][c] === 'seat') so.push({ slot: so.length + 1, col: c * 2, row: r });
-    return { id: 'C', rowCnt: 6, colCnt: cols * 2 - 1, seatCount: so.length, grid: grid, slotOrder: so, firstPageVposShift: shift || 0 };
+    for (c = cols - 1; c >= 0; c--) for (r = rows - 1; r >= 0; r--) if (types[r][c] === 'seat') so.push({ slot: so.length + 1, col: c * 2, row: r });
+    return { id: 'C', rowCnt: rows, colCnt: cols * 2 - 1, cols: cols, seatCount: so.length, grid: grid, slotOrder: so, firstPageVposShift: shift || 0 };
+  }
+  /* 화면용 배치도(rows×cols)를 hwpx 양식 크기(6행 × tplCols열)의 배치도로 바꾼다.
+   * 양식 표는 크기가 고정이라, 고른 크기는 오른쪽 아래(앞줄 쪽)에 놓고 나머지 칸은 비워 둔다. */
+  function toTemplateLayout(L, tplCols) {
+    var R = L.rowCnt, K = L.cols, ro = 6 - R, co = tplCols - K, grid = [], r, c;
+    for (r = 0; r < 6; r++) { var row = []; for (c = 0; c < tplCols * 2 - 1; c++) row.push(c % 2 ? 'gap' : 'void'); grid.push(row); }
+    for (r = 0; r < R; r++) for (c = 0; c < K * 2 - 1; c++) grid[r + ro][c + co * 2] = L.grid[r][c];
+    return {
+      id: L.id, rowCnt: 6, colCnt: tplCols * 2 - 1, cols: tplCols, seatCount: L.seatCount, grid: grid,
+      slotOrder: L.slotOrder.map(function (s) { return { slot: s.slot, col: s.col + co * 2, row: s.row + ro }; }),
+      firstPageVposShift: L.firstPageVposShift
+    };
   }
 
   /* ---------- 제목 ---------- */
@@ -547,7 +565,7 @@
     parseDelimited: parseDelimited, rowsToRoster: rowsToRoster, parseRosterText: parseRosterText,
     stripUnit: stripUnit, classKeys: classKeys, buildClass: buildClass, isExcluded: isExcluded, noteExcluded: noteExcluded,
     newPage: newPage, pageSeed: pageSeed, fillPage: fillPage, buildPages: buildPages,
-    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, parseTitle: parseTitle, parseJaeok: parseJaeok, lineToRow: lineToRow, parsePdfPages: parsePdfPages, matchPage: matchPage, matchPages: matchPages, defaultTypes: defaultTypes, resizeTypes: resizeTypes, customLayout: customLayout, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
+    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, parseTitle: parseTitle, parseJaeok: parseJaeok, lineToRow: lineToRow, parsePdfPages: parsePdfPages, matchPage: matchPage, matchPages: matchPages, defaultTypes: defaultTypes, resizeTypes: resizeTypes, customLayout: customLayout, toTemplateLayout: toTemplateLayout, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SeatCore = api;
