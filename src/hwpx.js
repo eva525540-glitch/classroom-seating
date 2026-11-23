@@ -62,67 +62,75 @@
     });
   }
 
-  /* 좌석 채우기: cells = [{no,name}|null] (슬롯 순서) */
-  function fillSeats(tblPara, layout, cells, shade) {
-    var tbl = descendants(tblPara, 'tbl')[0];
-    var tcs = descendants(tbl, 'tc');
-    var byAddr = {};
-    tcs.forEach(function (tc) {
-      var a = kids(tc, 'cellAddr')[0];
-      byAddr[a.getAttribute('colAddr') + ',' + a.getAttribute('rowAddr')] = tc;
-    });
-    layout.slotOrder.forEach(function (s, i) {
-      var tc = byAddr[s.col + ',' + s.row];
-      if (!tc) throw new Error('좌석 셀을 찾지 못했습니다: ' + s.col + ',' + s.row);
-      var ps = kids(kids(tc, 'subList')[0], 'p');
-      if (ps.length !== 2) throw new Error('좌석 셀의 문단 구조가 예상과 다릅니다.');
-      var c = cells[i];
-      setText(ps[0], c ? String(c.no) : '');
-      setText(ps[1], c ? c.name : '');
-      if (c && c.picked && shade) {
-        var old = tc.getAttribute('borderFillIDRef');
-        if (shade[old]) tc.setAttribute('borderFillIDRef', shade[old]);
-      }
-    });
-    return tbl;
-  }
-
-  /* 선택 학생 좌석용 배경색: header.xml 은 기존 서식을 그대로 두고 borderFill 만 뒤에 추가한다. */
+  /* 칸 서식(borderFill) 은행: header.xml 의 기존 서식은 그대로 두고, 필요한 변형(X 표시·배경색)만 뒤에 추가한다. */
   var SHADE_COLOR = '#D9ECFF';
-  function addShadeFills(headerXml, refs) {
-    var bfs = headerXml.match(/<hh:borderFills[^>]*>/);
-    var cnt = parseInt((bfs[0].match(/itemCnt="(\d+)"/) || [0, 0])[1], 10);
-    var maxId = 0;
-    headerXml.replace(/<hh:borderFill id="(\d+)"/g, function (m, id) { maxId = Math.max(maxId, +id); return m; });
-    var map = {}, add = '';
-    refs.forEach(function (ref) {
-      var re = new RegExp('<hh:borderFill id="' + ref + '"[^>]*>[\\s\\S]*?</hh:borderFill>');
-      var m = headerXml.match(re);
-      if (!m) return;
-      var id = ++maxId, s = m[0].replace('id="' + ref + '"', 'id="' + id + '"');
+  function FillBank(headerXml) {
+    this.xml = headerXml;
+    this.base = parseInt((headerXml.match(/<hh:borderFills[^>]*itemCnt="(\d+)"/) || [0, 0])[1], 10);
+    this.maxId = 0; var self = this;
+    headerXml.replace(/<hh:borderFill id="(\d+)"/g, function (m, id) { self.maxId = Math.max(self.maxId, +id); return m; });
+    this.added = []; this.cache = {};
+  }
+  FillBank.prototype.find = function (ref) {
+    var m = this.xml.match(new RegExp('<hh:borderFill id="' + ref + '"[^>]*>[\\s\\S]*?</hh:borderFill>'));
+    return m ? m[0] : null;
+  };
+  /* ref 서식에서 슬래시(X 표시)와 배경색만 바꾼 서식의 id. 바뀐 게 없으면 ref 그대로. */
+  FillBank.prototype.get = function (ref, opt) {
+    var src = this.find(ref);
+    if (!src) return ref;
+    var want = opt.slash === 'CENTER' ? 'CENTER' : 'NONE';
+    var cur = (src.match(/<hh:slash type="(\w+)"/) || [0, 'NONE'])[1];
+    if (cur === want && !opt.shade) return ref;
+    var key = ref + '|' + want + '|' + (opt.shade ? 1 : 0);
+    if (this.cache[key]) return this.cache[key];
+    var id = ++this.maxId, s = src.replace('id="' + ref + '"', 'id="' + id + '"');
+    s = s.replace(/<hh:slash type="\w+"/, '<hh:slash type="' + want + '"').replace(/<hh:backSlash type="\w+"/, '<hh:backSlash type="' + want + '"');
+    if (opt.shade) {
       var brush = '<hc:fillBrush><hc:winBrush faceColor="' + SHADE_COLOR + '" hatchColor="#999999" alpha="0"/></hc:fillBrush>';
       if (/<hc:fillBrush>[\s\S]*?<\/hc:fillBrush>/.test(s)) s = s.replace(/<hc:fillBrush>[\s\S]*?<\/hc:fillBrush>/, brush);
       else s = s.replace('</hh:borderFill>', brush + '</hh:borderFill>');
-      map[ref] = String(id); add += s;
+    }
+    this.added.push(s); this.cache[key] = String(id);
+    return String(id);
+  };
+  FillBank.prototype.finish = function () {
+    if (!this.added.length) return this.xml;
+    var last = this.xml.lastIndexOf('</hh:borderFill>') + '</hh:borderFill>'.length;
+    var out = this.xml.slice(0, last) + this.added.join('') + this.xml.slice(last);
+    return out.replace(/(<hh:borderFills[^>]*itemCnt=")\d+(")/, '$1' + (this.base + this.added.length) + '$2');
+  };
+
+  /* 좌석표 채우기·꾸미기.
+   * layout.grid 의 칸 종류(seat / void / x)에 맞게 X 표시를 넣고, 좌석 칸에는 번호·이름을 쓴다.
+   * cells = [{no,name,picked}|null] (슬롯 순서) */
+  function fillSeats(tblPara, layout, cells, bank) {
+    var tbl = descendants(tblPara, 'tbl')[0];
+    var tcs = descendants(tbl, 'tc');
+    var slotAt = {}, proto = null;
+    layout.slotOrder.forEach(function (s, i) { slotAt[s.col + ',' + s.row] = i; });
+    tcs.forEach(function (tc) {
+      var ps = kids(kids(tc, 'subList')[0], 'p');
+      if (!proto && ps.length === 2) proto = kids(tc, 'subList')[0];   // 좌석 칸의 문단 구조(번호·이름)
     });
-    var last = headerXml.lastIndexOf('</hh:borderFill>') + '</hh:borderFill>'.length;
-    var out = headerXml.slice(0, last) + add + headerXml.slice(last);
-    out = out.replace(/(<hh:borderFills[^>]*itemCnt=")\d+(")/, '$1' + (cnt + Object.keys(map).length) + '$2');
-    return { xml: out, map: map };
-  }
-  function seatBorderRefs(paras, layout, pages) {
-    var want = {};
-    pages.forEach(function (pg) { pg.cells.forEach(function (c, i) { if (c && c.picked) want[layout.slotOrder[i].col + ',' + layout.slotOrder[i].row] = 1; }); });
-    var refs = {};
-    paras.forEach(function (p) {
-      var tbl = descendants(p, 'tbl')[0];
-      if (!tbl || tbl.getAttribute('rowCnt') === '1') return;
-      descendants(tbl, 'tc').forEach(function (tc) {
-        var a = kids(tc, 'cellAddr')[0], key = a.getAttribute('colAddr') + ',' + a.getAttribute('rowAddr');
-        if (want[key]) refs[tc.getAttribute('borderFillIDRef')] = 1;
-      });
+    if (!proto) throw new Error('양식에서 좌석 칸을 찾지 못했습니다.');
+    tcs.forEach(function (tc) {
+      var a = kids(tc, 'cellAddr')[0], col = +a.getAttribute('colAddr'), row = +a.getAttribute('rowAddr');
+      if (col % 2 !== 0) return;                       // 칸막이 열은 그대로
+      var type = (layout.grid[row] || [])[col];
+      if (!type || type === 'gap') return;
+      var key = col + ',' + row, i = slotAt[key], c = i == null ? null : cells[i];
+      if (type === 'seat') {
+        var sub = kids(tc, 'subList')[0], ps = kids(sub, 'p');
+        if (ps.length !== 2) { var nsub = proto.cloneNode(true); tc.replaceChild(nsub, sub); sub = nsub; ps = kids(sub, 'p'); }
+        setText(ps[0], c ? String(c.no) : '');
+        setText(ps[1], c ? c.name : '');
+      }
+      var ref = tc.getAttribute('borderFillIDRef');
+      var nref = bank.get(ref, { slash: type === 'x' ? 'CENTER' : 'NONE', shade: type === 'seat' && c && c.picked });
+      if (nref !== ref) tc.setAttribute('borderFillIDRef', nref);
     });
-    return Object.keys(refs);
+    return tbl;
   }
 
   function previewText(pages, layout, twoLineMax) {
@@ -161,11 +169,7 @@
     var sec = doc.documentElement;
     var paras = kids(sec, 'p');
     var B = splitBlocks(paras);
-    var headerXml = await zip.file('Contents/header.xml').async('string'), shade = null;
-    if (pages.some(function (pg) { return pg.cells.some(function (c) { return c && c.picked; }); })) {
-      var sh = addShadeFills(headerXml, seatBorderRefs(paras, layout, pages));
-      headerXml = sh.xml; shade = sh.map;
-    }
+    var bank = new FillBank(await zip.file('Contents/header.xml').async('string'));
 
     while (sec.firstChild) sec.removeChild(sec.firstChild);
     sec.appendChild(B.head);
@@ -191,7 +195,7 @@
         setRunText(runs[1], '(' + pg.subject + ')');
         seatPara = block[off1 + 1];
       }
-      fillSeats(seatPara, layout, pg.cells, shade);
+      fillSeats(seatPara, layout, pg.cells, bank);
       if (delta) block.forEach(function (p) { shiftVpos(p, delta); });
       block.forEach(function (p) { sec.appendChild(p); });
     });
@@ -216,7 +220,7 @@
       if (n === 'mimetype') continue;
       var opt = { compression: 'DEFLATE', createFolders: false };
       if (n === 'Contents/section0.xml') nz.file(n, out, opt);
-      else if (n === 'Contents/header.xml' && shade) nz.file(n, headerXml, opt);
+      else if (n === 'Contents/header.xml' && bank.added.length) nz.file(n, bank.finish(), opt);
       else if (n === 'Preview/PrvText.txt') nz.file(n, previewText(pages, layout, oneMax), opt);
       else if (n === 'Preview/PrvImage.png') nz.file(n, opts.previewPng, opt);
       else if (n === 'settings.xml') {

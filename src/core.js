@@ -380,6 +380,31 @@
     return { key: classKey, grade: first.grade, cls: first.cls, students: students, studentList: list, subjects: subs };
   }
 
+  /* ---------- 직접 만드는 좌석 배치도 ----------
+   * types[행 0~5][열] = 'seat'(좌석) | 'blank'(빈칸) | 'x'(책상 없음, 대각선)
+   * 기본은 모든 칸이 좌석(열마다 6석). 슬롯 순서는 양식과 같다:
+   * 맨 오른쪽 열의 맨 아래(칠판 쪽)부터 위로, 열 끝에 닿으면 바로 왼쪽 열의 맨 아래로. 빈칸·X는 건너뛴다. */
+  function defaultTypes(cols) {
+    var t = [];
+    for (var r = 0; r < 6; r++) { var row = []; for (var c = 0; c < cols; c++) row.push('seat'); t.push(row); }
+    return t;
+  }
+  function resizeTypes(types, cols) {
+    var t = defaultTypes(cols);
+    for (var r = 0; r < 6; r++) for (var c = 0; c < cols; c++) if (types[r] && types[r][c]) t[r][c] = types[r][c];
+    return t;
+  }
+  function customLayout(cols, types, shift) {
+    var grid = [], so = [], r, c;
+    for (r = 0; r < 6; r++) {
+      var row = [];
+      for (c = 0; c < cols; c++) { if (c) row.push('gap'); var t = types[r][c]; row.push(t === 'seat' ? 'seat' : t === 'x' ? 'x' : 'void'); }
+      grid.push(row);
+    }
+    for (c = cols - 1; c >= 0; c--) for (r = 5; r >= 0; r--) if (types[r][c] === 'seat') so.push({ slot: so.length + 1, col: c * 2, row: r });
+    return { id: 'C', rowCnt: 6, colCnt: cols * 2 - 1, seatCount: so.length, grid: grid, slotOrder: so, firstPageVposShift: shift || 0 };
+  }
+
   /* ---------- 제목 ---------- */
   function titleInfo(subject, oneLineMax) {
     var len = subject.length; // 과목명 글자 수
@@ -391,7 +416,7 @@
     parseDelimited: parseDelimited, rowsToRoster: rowsToRoster, parseRosterText: parseRosterText,
     stripUnit: stripUnit, classKeys: classKeys, buildClass: buildClass, isExcluded: isExcluded, noteExcluded: noteExcluded,
     newPage: newPage, pageSeed: pageSeed, fillPage: fillPage, buildPages: buildPages,
-    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
+    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, defaultTypes: defaultTypes, resizeTypes: resizeTypes, customLayout: customLayout, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SeatCore = api;

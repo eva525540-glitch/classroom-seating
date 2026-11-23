@@ -122,6 +122,37 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
     // 두 줄 제목: 과목명 5자 이상 쪽은 제목 1행이 따로 있어야 한다
     assert.ok(/<hp:t>\(코딩과 알고리즘\)<\/hp:t>/.test(sec)); ok(v + ': 두 줄 제목 채움');
   }
+  // 직접 만드는 배치도: X·빈칸·좌석을 마음대로, 모든 쪽이 같은 배치
+  for (const cols of [4, 5]) {
+    const L0 = layouts[cols === 4 ? 'A' : 'B'];
+    const types = core.defaultTypes(cols); types[0][0] = 'x'; types[2][1] = 'blank'; types[5][cols - 1] = 'x';
+    const CL = core.customLayout(cols, types, L0.firstPageVposShift);
+    assert.equal(CL.seatCount, 6 * cols - 3);
+    assert.deepEqual(CL.slotOrder[0], { slot: 1, col: (cols - 1) * 2, row: 4 }); // 맨 오른쪽 열 아래 칸이 X이므로 한 칸 위부터
+    const tplC = fs.readFileSync(path.join(root, 'templates', 'seat-template-' + (cols === 4 ? 'A' : 'B') + '.hwpx'));
+    const cellsC = Array.from({ length: CL.seatCount }, (_, i) => ({ no: i + 1, name: '이름' + (i + 1), picked: i % 3 === 0 }));
+    const oc = await hw.buildHwpx({ JSZip, DOMParser, XMLSerializer }, tplC, CL, [{ subject: '철학', cells: cellsC }, { subject: '공통', cells: cellsC.map(c => ({ ...c, picked: false })) }], { previewPng: PNG });
+    const zc = await JSZip.loadAsync(oc);
+    const secC = await zc.file('Contents/section0.xml').async('string'), hdrC = await zc.file('Contents/header.xml').async('string');
+    const errs = [];
+    [secC, hdrC].forEach(x => new DOMParser({ onError: (l, m) => { if (l !== 'warning') errs.push(m); } }).parseFromString(x, 'text/xml'));
+    assert.equal(errs.length, 0);
+    const doc = new DOMParser().parseFromString(secC, 'text/xml');
+    const tcs = []; (function walk(n) { for (let c = n.firstChild; c; c = c.nextSibling) { if (c.nodeType === 1) { if (c.localName === 'tc') tcs.push(c); walk(c); } } })(doc.documentElement);
+    const firstTbl = tcs.slice(0, (cols * 2 - 1) * 6);   // 첫 쪽 좌석표
+    const at = (col, row) => firstTbl.find(tc => { const a = [...tc.childNodes].find(n => n.localName === 'cellAddr'); return +a.getAttribute('colAddr') === col && +a.getAttribute('rowAddr') === row; });
+    const fillOf = (tc) => { const i = hdrC.indexOf('<hh:borderFill id="' + tc.getAttribute('borderFillIDRef') + '"'); return hdrC.slice(i, hdrC.indexOf('</hh:borderFill>', i)); };
+    const txt = (tc) => [...tc.getElementsByTagName('hp:t')].map(n => n.textContent).filter(Boolean).join('|');
+    assert.ok(/<hh:slash type="CENTER"/.test(fillOf(at(0, 0))), 'X 칸에 대각선'); assert.equal(txt(at(0, 0)), '');
+    assert.ok(/<hh:slash type="CENTER"/.test(fillOf(at((cols - 1) * 2, 5))), '오른쪽 아래 X');
+    assert.ok(!/<hh:slash type="CENTER"/.test(fillOf(at(2, 2))), '빈칸에는 대각선 없음'); assert.equal(txt(at(2, 2)), '');
+    const s1 = at((cols - 1) * 2, 4); assert.equal(txt(s1), '1|이름1'); assert.ok(/#D9ECFF/.test(fillOf(s1)), '선택 학생 색');
+    // 양식에서 원래 빈칸/X였던 곳도 좌석이 되면 번호·이름이 들어가고 대각선이 없다
+    const nat = cols === 4 ? at(4, 0) : at(cols === 5 ? 8 : 0, 1);
+    assert.ok(/\|이름\d+$/.test(txt(nat)) || /^\d+\|이름\d+$/.test(txt(nat)), '원래 빈 칸이던 곳에 좌석: ' + txt(nat));
+    assert.ok(!/<hh:slash type="CENTER"/.test(fillOf(nat)));
+    ok('직접 만든 배치도 ' + cols + '열: X·빈칸·좌석·색이 hwpx에 반영, 모든 쪽 동일');
+  }
   // 첫 쪽이 두 줄형일 때 (공통 제외)
   const L = layouts.A, tpl = fs.readFileSync(path.join(root, 'templates/seat-template-A.hwpx'));
   const p2 = [{ subject: '코딩과 알고리즘', cells: new Array(21).fill(null) }, { subject: '철학', cells: new Array(21).fill(null) }];

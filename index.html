@@ -92,6 +92,9 @@ button:disabled{opacity:.4;cursor:default}
 .seat.sel{outline:3px solid var(--acc);outline-offset:1px}
 .seat.over{background:#d6ecf5}
 .void{visibility:hidden}
+.vcell{border:1.5px dashed #b5c2d3;border-radius:14px;min-height:74px;display:flex;align-items:center;justify-content:center;color:#9aa7b8;font-size:.8rem;cursor:pointer}
+.xcell.ed{cursor:pointer;min-height:74px}
+button.sub.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .xcell{border-radius:14px;border:1.5px solid var(--ink);background:linear-gradient(to top right,transparent calc(50% - 1px),var(--ink) 50%,transparent calc(50% + 1px))}
 .board{max-width:760px;margin:12px auto 0;border:1.5px solid var(--ink);text-align:center;padding:10px;font-family:var(--round);font-size:1.1rem;font-weight:400;letter-spacing:.5em;border-radius:14px}
 .legend{max-width:760px;margin:10px auto 0;font-size:.82rem;color:#333;display:flex;align-items:center;gap:6px}
@@ -190,7 +193,8 @@ details summary{cursor:pointer;font-size:.85rem;color:var(--mute);letter-spacing
     <div class="row" style="align-items:center">
       <div class="g" style="flex:3"><div class="tabs" id="tabs"></div></div>
       <div class="btns">
-        <span class="seg hidden" id="layoutSeg"><button data-v="A">A</button><button data-v="B">B</button></span>
+        <span class="seg hidden" id="layoutSeg"><button data-v="4">4열</button><button data-v="5">5열</button></span>
+        <button class="sub hidden" id="btnEdit">배치도 편집</button>
         <button class="sub" id="btnUndo">되돌리기</button>
         <button class="sub" id="btnRedo">다시 하기</button>
         <button class="sub" id="btnView">전체 보기</button>

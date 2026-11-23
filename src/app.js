@@ -3,7 +3,6 @@
   'use strict';
   var C = window.SeatCore, H = window.SeatHwpx, D = window.SEAT_DATA;
   var LAYOUTS = D.layouts.layouts, ONE_MAX = D.layouts.titleOneLineMaxChars;
-  var SEATS = 21;
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
@@ -12,21 +11,27 @@
     master: null, dirty: true,                                      // 적용된 학생 명렬표
     selEntries: null, matchInfo: null,                              // 선택과목 명렬표에서 읽은 줄
     classKey: null, cls: null,
-    mode: 'A', layout: 'A',
+    mode: 'A',                                                      // 'A' | 'B' | 'manual'(직접 만드는 배치도)
+    custom: { cols: 4, types: C.defaultTypes(4) }, edit: false, tool: 'blank',
     seed: 1, keywords: C.DEFAULT_KEYWORDS.slice(), sortSubjects: 'appear',
     manual: {}, pages: [], cur: 0, sel: -1, selPool: null, exportSel: {}, thumbs: false,
     history: [], future: []
   };
 
   /* ---------- 공통 ---------- */
-  function ctx() {
-    return { seatCount: SEATS, manual: S.mode === 'manual', excluded: function (no) { return C.isExcluded(S.cls.students[no], S.keywords, S.manual); } };
+  function layoutId() { return S.mode === 'manual' ? (S.custom.cols === 4 ? 'A' : 'B') : S.mode; }   // 쓰는 hwpx 양식
+  function curLayout() {
+    return S.mode === 'manual' ? C.customLayout(S.custom.cols, S.custom.types, LAYOUTS[layoutId()].firstPageVposShift) : LAYOUTS[S.mode];
   }
-  function snapshot() { return JSON.stringify({ pages: S.pages, manual: S.manual, seed: S.seed, layout: S.layout, mode: S.mode }); }
+  function seatCount() { return curLayout().slotOrder.length; }
+  function ctx() {
+    return { seatCount: seatCount(), manual: false, excluded: function (no) { return C.isExcluded(S.cls.students[no], S.keywords, S.manual); } };
+  }
+  function snapshot() { return JSON.stringify({ pages: S.pages, manual: S.manual, seed: S.seed, custom: S.custom, mode: S.mode }); }
   function push() { S.history.push(snapshot()); if (S.history.length > 100) S.history.shift(); S.future = []; }
   function restore(str) {
     var o = JSON.parse(str);
-    S.pages = o.pages; S.manual = o.manual; S.seed = o.seed; S.layout = o.layout; S.mode = o.mode; S.sel = -1; S.selPool = null;
+    S.pages = o.pages; S.manual = o.manual; S.seed = o.seed; S.custom = o.custom; S.mode = o.mode; S.sel = -1; S.selPool = null;
     if (S.cur >= S.pages.length) S.cur = S.pages.length - 1;
   }
   function isPicked(pg, no) { return !pg.common && !!pg.pick && pg.pick.indexOf(no) >= 0; }
@@ -221,9 +226,7 @@
     return C.buildClassFromMaster(S.master, key, subs, { sortSubjects: S.sortSubjects });
   }
   function newPages() {
-    var pages = C.buildPages(S.cls, ctx(), S.seed);
-    if (S.mode === 'manual') pages.forEach(function (p) { p.seats = new Array(SEATS).fill(null); p.overflow = []; p.locked = []; });
-    return pages;
+    return C.buildPages(S.cls, ctx(), S.seed);
   }
   function resetExportSel() { S.exportSel = {}; S.pages.forEach(function (_, i) { S.exportSel[i] = true; }); }
   function startClass(key) {
@@ -249,14 +252,15 @@
   /* ---------- 좌석표 HTML ---------- */
   function slotMap(L) { var m = {}; L.slotOrder.forEach(function (s, i) { m[s.row + ',' + s.col] = i; }); return m; }
   function seatsHtml(pg, opt) {
-    var L = LAYOUTS[S.layout], sm = slotMap(L), ci = [];
+    var L = curLayout(), sm = slotMap(L), ci = [];
     L.grid[0].forEach(function (t, c) { if (t !== 'gap') ci.push(c); });
     var html = '<div class="seats" style="grid-template-columns:repeat(' + ci.length + ',1fr)">';
     L.grid.forEach(function (row, r) {
       ci.forEach(function (c) {
         var t = row[c];
-        if (t === 'void') html += '<div class="void"></div>';
-        else if (t === 'x') html += '<div class="xcell"></div>';
+        var pos = ' data-r="' + r + '" data-c="' + (c / 2) + '"';
+        if (t === 'void') html += '<div class="' + (opt.edit ? 'vcell' : 'void') + '"' + pos + '>' + (opt.edit ? '빈칸' : '') + '</div>';
+        else if (t === 'x') html += '<div class="xcell' + (opt.edit ? ' ed' : '') + '"' + pos + '></div>';
         else {
           var i = sm[r + ',' + c], no = pg.seats[i], blocked = pg.blocked.indexOf(i) >= 0;
           var locked = no != null && pg.locked.indexOf(no) >= 0;
@@ -264,7 +268,7 @@
           var inner = '<span class="slot">' + (i + 1) + '</span>';
           if (blocked) inner += '<span class="nm">비움</span>';
           else if (no != null) inner += '<span class="no">' + no + '</span><span class="nm">' + esc(S.cls.students[no].name) + '</span>' + (locked ? '<span class="tag">●</span>' : '');
-          html += '<div class="' + cls + '" data-slot="' + i + '"' + (opt.interactive && !blocked && no != null ? ' draggable="true"' : '') + '>' + inner + '</div>';
+          html += '<div class="' + cls + '" data-slot="' + i + '"' + pos + (opt.interactive && !blocked && no != null ? ' draggable="true"' : '') + '>' + inner + '</div>';
         }
       });
     });
@@ -295,8 +299,7 @@
   function setMode(m) {
     if (m === S.mode) return;
     if (S.cls) push();
-    S.mode = m;
-    if (m !== 'manual') S.layout = m;
+    S.mode = m; S.edit = false;
     if (S.cls) { S.pages = newPages(); resetExportSel(); S.cur = 0; S.sel = -1; S.selPool = null; }
     render();
   }
@@ -304,7 +307,7 @@
   /* ---------- 렌더 ---------- */
   function warningsFor(pg) {
     var w = [];
-    if (S.mode !== 'manual' && pg.overflow.length) w.push('좌석(' + SEATS + '개)이 모자라 앉히지 못한 학생: ' + pg.overflow.map(function (n) { return n + ' ' + S.cls.students[n].name; }).join(', '));
+    if (pg.overflow.length) w.push('좌석(' + seatCount() + '개)이 모자라 앉히지 못한 학생: ' + pg.overflow.map(function (n) { return n + ' ' + S.cls.students[n].name; }).join(', '));
     if (C.titleInfo(pg.subject, ONE_MAX).tooLong) w.push('과목명이 12자를 넘어 제목 2행에 다 들어가지 않을 수 있습니다. 한글에서 글자 크기를 줄여 주세요.');
     return w;
   }
@@ -313,9 +316,9 @@
     if (!S.cls) return;
     var man = S.mode === 'manual';
     $('seed').value = S.seed;
-    $('layoutSeg').classList.toggle('hidden', !man);
-    Array.prototype.forEach.call($('layoutSeg').children, function (b) { b.classList.toggle('on', b.dataset.v === S.layout); });
-    $('shufflePanel').classList.toggle('hidden', man);
+    $('layoutSeg').classList.toggle('hidden', !man); $('btnEdit').classList.toggle('hidden', !man);
+    Array.prototype.forEach.call($('layoutSeg').children, function (b) { b.classList.toggle('on', +b.dataset.v === S.custom.cols); });
+    $('btnEdit').textContent = S.edit ? '편집 끝' : '배치도 편집'; $('btnEdit').classList.toggle('on', S.edit);
     $('btnUndo').disabled = !S.history.length; $('btnRedo').disabled = !S.future.length;
     $('btnView').textContent = S.thumbs ? '한 쪽씩' : '전체 보기';
     renderSummary(); renderTabs(); renderPage();
@@ -334,7 +337,7 @@
     }).join('');
   }
   function renderPage() {
-    var pg = S.pages[S.cur], man = S.mode === 'manual';
+    var pg = S.pages[S.cur];
     $('thumbView').classList.toggle('hidden', !S.thumbs);
     $('pageView').classList.toggle('hidden', S.thumbs);
     $('pageWarn').innerHTML = S.pages.map(function (p, i) {
@@ -347,13 +350,15 @@
       }).join('') + '</div>';
       return;
     }
-    $('paper').innerHTML = paperHtml(pg, { sel: S.sel, interactive: true }) + (pg.common ? '' : '<div class="legend"><i></i>' + esc(pg.subject) + ' 선택 학생</div>');
+    $('paper').innerHTML = paperHtml(pg, { sel: S.sel, interactive: true, edit: S.edit }) + (pg.common ? '' : '<div class="legend"><i></i>' + esc(pg.subject) + ' 선택 학생</div>');
     var bar = '';
-    if (S.sel >= 0) {
+    if (S.edit) {
+      bar = ['seat:좌석', 'blank:빈칸', 'x:X'].map(function (s) { var k = s.split(':'); return '<button class="sub' + (S.tool === k[0] ? ' on' : '') + '" data-tool="' + k[0] + '">' + k[1] + '</button>'; }).join('');
+    } else if (S.sel >= 0) {
       var no = pg.seats[S.sel], blocked = pg.blocked.indexOf(S.sel) >= 0;
       bar += '<b>슬롯 ' + (S.sel + 1) + (no != null ? ' · ' + no + ' ' + esc(S.cls.students[no].name) : blocked ? ' · 비움' : ' · 빈자리') + '</b>';
       if (no != null) bar += '<button class="sub" data-act="lock">' + (pg.locked.indexOf(no) >= 0 ? '고정 해제' : '고정') + '</button><button class="sub" data-act="unseat">자리 빼기</button><button class="sub" data-act="rename">이름 수정</button>';
-      bar += '<button class="sub" data-act="block">' + (blocked ? '비움 해제' : '좌석 비우기') + '</button>';
+      if (S.mode !== 'manual') bar += '<button class="sub" data-act="block">' + (blocked ? '비움 해제' : '좌석 비우기') + '</button>';
       if (no != null) bar += '<button class="sub" data-act="excl">제외</button>';
       bar += '<button class="sub" data-act="desel">취소</button>';
     }
@@ -361,7 +366,7 @@
     $('pgSeed').value = pg.seed; $('pgSeed').disabled = pg.common; $('btnReshuffle').disabled = pg.common;
     $('namePanel').classList.toggle('hidden', pg.common); $('pgName').value = pg.subject;
     var pool = unseated(pg);
-    $('poolPanel').classList.toggle('hidden', !(man || pool.length));
+    $('poolPanel').classList.toggle('hidden', !pool.length);
     $('pool').innerHTML = pool.map(function (n) { return '<span class="chip' + (S.selPool === n ? ' sel' : '') + (isPicked(pg, n) ? ' picked' : '') + '" draggable="true" data-pool="' + n + '"><i>' + n + '</i>' + esc(S.cls.students[n].name) + '</span>'; }).join('') || '<span style="color:var(--mute);font-size:.82rem">모두 배치됨</span>';
     renderStudents(pg);
   }
@@ -413,9 +418,8 @@
       var no = pg.seats[i];
       if (no != null) { var l = pg.locked.indexOf(no); if (l >= 0) pg.locked.splice(l, 1); }
       pg.blocked.push(i);
-      if (S.mode === 'manual') pg.seats[i] = null;
     }
-    if (S.mode !== 'manual') C.relayout(pg, ctx());
+    C.relayout(pg, ctx());
     S.sel = -1; render();
   }
   function setExcluded(no, excluded) {
@@ -442,6 +446,24 @@
     S.rows.forEach(function (r) { if (C.normGrade(r.grade) + '|' + C.normCls(r.cls) === S.classKey && parseInt(r.no, 10) === no) r.name = v; });
     renderMaster(); render();
   }
+  /* 배치도가 바뀌면 모든 쪽을 같은 모양으로 다시 놓는다: 앉은 순서(앞자리부터)를 지키며 빈칸·X를 건너뛴다 */
+  function relayoutPages() {
+    var N = seatCount();
+    S.pages.forEach(function (pg) {
+      var seq = pg.seats.filter(function (x) { return x != null; }).concat(pg.overflow);
+      var seats = new Array(N).fill(null), p = 0;
+      for (var i = 0; i < N && p < seq.length; i++) seats[i] = seq[p++];
+      pg.seats = seats; pg.overflow = seq.slice(p); pg.blocked = [];
+      pg.locked = pg.locked.filter(function (no) { return seats.indexOf(no) >= 0; });
+    });
+    S.sel = -1; S.selPool = null;
+  }
+  function paintCell(r, c) {
+    if (S.custom.types[r][c] === S.tool) return;
+    push();
+    S.custom.types[r][c] = S.tool;
+    relayoutPages(); render();
+  }
   function applySeed() {
     S.pages.forEach(function (p, i) { if (!p.common) C.reshuffle(p, C.pageSeed(S.seed, i), ctx()); });
     S.sel = -1; render();
@@ -450,7 +472,7 @@
   /* ---------- 내보내기 ---------- */
   function drawPreview(pg) {
     var cv = document.createElement('canvas'); cv.width = 724; cv.height = 1024;
-    var g = cv.getContext('2d'), L = LAYOUTS[S.layout];
+    var g = cv.getContext('2d'), L = curLayout();
     g.fillStyle = '#fff'; g.fillRect(0, 0, 724, 1024);
     g.fillStyle = '#000'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.font = 'bold 30px "Malgun Gothic",sans-serif';
@@ -465,7 +487,7 @@
         var x = x0 + ci * (w + gap), y = top + r * (h + gap); ci++;
         if (tp === 'void') return;
         g.strokeStyle = '#000'; g.lineWidth = 2; g.strokeRect(x, y, w, h);
-        if (tp === 'x') { g.beginPath(); g.moveTo(x, y + h); g.lineTo(x + w, y); g.stroke(); return; }
+        if (tp === 'x') { g.beginPath(); g.moveTo(x, y + h); g.lineTo(x + w, y); g.moveTo(x, y); g.lineTo(x + w, y + h); g.stroke(); return; }
         var no = pg.seats[sm[r + ',' + c]];
         if (no != null) {
           g.font = 'bold 28px "Malgun Gothic",sans-serif'; g.fillText(String(no), x + w / 2, y + 40);
@@ -483,13 +505,13 @@
   function doExport() {
     var idx = selectedIdx(), out = $('expMsg');
     if (!idx.length) { out.textContent = '내보낼 쪽을 하나 이상 선택하세요.'; return; }
-    var bad = idx.filter(function (i) { var p = S.pages[i]; return p.overflow.length || (S.mode === 'manual' && unseated(p).length); });
+    var bad = idx.filter(function (i) { var p = S.pages[i]; return p.overflow.length || unseated(p).length; });
     if (bad.length && !confirm('앉지 못한 학생이 있는 쪽이 있습니다 (' + bad.map(function (i) { return S.pages[i].subject; }).join(', ') + '). 그래도 내보낼까요?')) return;
     var sel = idx.map(function (i) { return S.pages[i]; });
     out.textContent = '만드는 중…';
     drawPreview(sel[0]).then(function (png) {
       return H.buildHwpx({ JSZip: window.JSZip, DOMParser: window.DOMParser, XMLSerializer: window.XMLSerializer },
-        b64ToBytes(D.templates[S.layout]), LAYOUTS[S.layout],
+        b64ToBytes(D.templates[layoutId()]), curLayout(),
         sel.map(function (p) { return { subject: p.subject, cells: cellsOf(p) }; }), { previewPng: png, titleOneLineMaxChars: ONE_MAX });
     }).then(function (bytes) {
       var g = (S.cls.grade.match(/\d+/) || [''])[0], c = (S.cls.cls.match(/\d+/) || [''])[0];
@@ -549,9 +571,10 @@
 
     $('modes').onclick = function (e) { var b = e.target.closest('[data-m]'); if (b) setMode(b.dataset.m); };
     $('layoutSeg').onclick = function (e) {
-      var v = e.target.dataset && e.target.dataset.v; if (!v || v === S.layout) return;
-      push(); S.layout = v; render();
+      var v = +(e.target.dataset && e.target.dataset.v); if (!v || v === S.custom.cols) return;
+      push(); S.custom.types = C.resizeTypes(S.custom.types, v); S.custom.cols = v; relayoutPages(); render();
     };
+    $('btnEdit').onclick = function () { S.edit = !S.edit; S.sel = -1; S.selPool = null; render(); };
     $('clsSel').onchange = function (e) { startClass(e.target.value); };
     $('sortSub').onchange = function (e) { S.sortSubjects = e.target.value; rebuildAll(); };
     $('seed').onchange = function (e) { push(); S.seed = (parseInt(e.target.value, 10) || 0) >>> 0; applySeed(); };
@@ -576,6 +599,7 @@
 
     var paper = $('paper');
     paper.onclick = function (e) {
+      if (S.edit) { var cell = e.target.closest('[data-r]'); if (cell) paintCell(+cell.dataset.r, +cell.dataset.c); return; }
       var i = seatOf(e); if (i < 0) return;
       var pg = cur();
       if (S.selPool != null) { place(S.selPool, i); return; }
@@ -612,6 +636,7 @@
     $('poolPanel').ondrop = function (e) { if (dragFrom >= 0) { e.preventDefault(); var f = dragFrom; dragFrom = -1; unseat(f); } };
 
     $('selbar').onclick = function (e) {
+      var tl = e.target.dataset && e.target.dataset.tool; if (tl) { S.tool = tl; renderPage(); return; }
       var a = e.target.dataset && e.target.dataset.act; if (!a) return;
       if (a === 'lock') toggleLock();
       else if (a === 'block') toggleBlock();
