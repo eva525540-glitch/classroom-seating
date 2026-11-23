@@ -123,7 +123,8 @@ button.sub.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .legend{max-width:760px;margin:10px auto 0;font-size:.82rem;color:#333;display:flex;align-items:center;gap:6px}
 .mergeorder{margin-top:10px}.mo-t{font-size:.82rem;color:var(--mute);margin-bottom:4px}.mo{display:flex;align-items:center;gap:8px;margin:4px 0}.mo i{width:14px;height:14px;border:1.5px solid var(--ink);border-radius:4px;flex:none}.mo span{flex:1}.mo .mv{padding:2px 8px}.mo .mv:disabled{opacity:.3;cursor:default}
 .tipb{position:relative}
-.tipb::after{content:attr(data-tip);display:none;position:absolute;left:0;top:calc(100% + 8px);width:max-content;max-width:220px;background:var(--ink);color:#fff;font-size:.78rem;font-weight:400;letter-spacing:0;line-height:1.5;padding:7px 10px;border-radius:14px;z-index:20;text-align:left;white-space:nowrap;word-break:keep-all}
+.tipb::after{content:attr(data-tip);display:none;position:absolute;left:0;top:calc(100% + 8px);width:max-content;max-width:220px;background:var(--ink);color:#fff;font-size:.78rem;font-weight:400;letter-spacing:0;line-height:1.5;padding:7px 10px;border-radius:14px;z-index:20;text-align:left;white-space:pre-line;word-break:keep-all}
+.tipr::after{left:auto;right:0;max-width:300px}
 .tipb:hover::after,.tipb:focus-visible::after{display:block}
 .clrrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .legend{flex-wrap:wrap;gap:6px 14px}.legend span{display:inline-flex;align-items:center;gap:6px}.legend i{width:14px;height:14px;border:1.5px solid var(--ink);display:inline-block;border-radius:4px}
@@ -252,7 +253,7 @@ details[open]>summary::before{content:"▾"}
   <section id="sUpload">
     <div class="sh"><span class="n">02</span><h2>선택과목</h2>
       <span class="q" tabindex="0" data-tip="공통은 자동으로 만들어져요.&#10;과목을 추가하고 선택한 학생을 고르세요.">?</span>
-      <span class="tools"><button class="sub mini" id="btnSave" title="학생 명렬표와 선택과목(학생 × 과목 표)을 엑셀로 저장">엑셀로 저장</button><button class="sub mini" id="btnLoad" title="저장한 엑셀을 불러와 이어서 작업">엑셀 불러오기</button></span>
+      <span class="tools"><button class="sub mini tipb tipr" id="btnSave" data-tip="학생 명렬표와 선택과목을 엑셀로 저장해요.&#10;나중에 불러와 이어서 작업할 수 있어요.">작업 저장</button><button class="sub mini tipb tipr" id="btnLoad" data-tip="저장한 작업 파일을 불러와&#10;이어서 작업해요.">작업 불러오기</button></span>
       <input id="workFile" type="file" accept=".xlsx,.xls" hidden></div>
     <div class="addsub"><input id="subName" type="text" placeholder="과목명 (예: 물리학Ⅰ)" aria-label="과목명"><button id="btnAddSub">과목 추가</button></div>
     <div id="subMsg" class="warn hidden"></div>
@@ -339,9 +340,9 @@ details[open]>summary::before{content:"▾"}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="src/data.js?v=mwtcvixj"></script>
-<script src="src/core.js?v=mwtcvixj"></script>
-<script src="src/hwpx.js?v=mwtcvixj"></script>
-<script src="src/app.js?v=mwtcvixj"></script>
+<script src="src/data.js?v=mwtd28pg"></script>
+<script src="src/core.js?v=mwtd28pg"></script>
+<script src="src/hwpx.js?v=mwtd28pg"></script>
+<script src="src/app.js?v=mwtd28pg"></script>
 </body>
 </html>
