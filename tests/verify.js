@@ -11,8 +11,7 @@ const PNG = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAA
 let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
 
 (async () => {
-  const tr = core.textToRoster('2학년 | 3반 | 사회 | 미래사회와 기술 (3) | 17 | 소나윤 | 전출
-제목 줄');
+  const tr = core.textToRoster('2학년 | 3반 | 사회 | 미래사회와 기술 (3) | 17 | 소나윤 | 전출'+String.fromCharCode(10)+'제목 줄');
   assert.equal(tr.length, 1); assert.equal(tr[0].subjectRaw, '미래사회와 기술(3)'); assert.equal(tr[0].note, '전출'); ok('PDF 글자 한 줄 파싱');
   const keys = core.classKeys(roster);
   assert.equal(keys.length, 1); assert.equal(keys[0].cls, '3반');
