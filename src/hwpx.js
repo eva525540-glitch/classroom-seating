@@ -63,7 +63,7 @@
   }
 
   /* 칸 서식(borderFill) 은행: header.xml 의 기존 서식은 그대로 두고, 필요한 변형(X 표시·배경색)만 뒤에 추가한다. */
-  var SHADE_COLOR = '#D9ECFF';
+  var SHADE_COLOR = '#FFE6D8';
   function FillBank(headerXml) {
     this.xml = headerXml;
     this.base = parseInt((headerXml.match(/<hh:borderFills[^>]*itemCnt="(\d+)"/) || [0, 0])[1], 10);
@@ -84,6 +84,18 @@
     if (this.charCache[key]) return this.charCache[key];
     var id = ++this.charMax;
     var c = m[0].replace('id="' + ref + '"', 'id="' + id + '"').replace(/<hh:spacing [^>]*\/>/, '<hh:spacing hangul="' + sp + '" latin="' + sp + '" hanja="' + sp + '" japanese="' + sp + '" other="' + sp + '" symbol="' + sp + '" user="' + sp + '"/>');
+    this.chars.push(c); this.charCache[key] = String(id);
+    return String(id);
+  };
+  /* 글자 서식 ref 에서 크기만 비율로 줄인 서식 (칸이 많은 큰 배치도용) */
+  FillBank.prototype.sized = function (ref, scale) {
+    if (scale >= 0.999) return ref;
+    var m = this.xml.match(new RegExp('<hh:charPr id="' + ref + '"[\\s\\S]*?</hh:charPr>'));
+    if (!m) return ref;
+    var h = +m[0].match(/<hh:charPr [^>]*height="(\d+)"/)[1], nh = Math.max(600, Math.round(h * scale)), key = ref + '#' + nh;
+    if (this.charCache[key]) return this.charCache[key];
+    var id = ++this.charMax;
+    var c = m[0].replace('id="' + ref + '"', 'id="' + id + '"').replace(/(<hh:charPr [^>]*height=")\d+(")/, '$1' + nh + '$2');
     this.chars.push(c); this.charCache[key] = String(id);
     return String(id);
   };
@@ -130,7 +142,34 @@
   /* 좌석표 채우기·꾸미기.
    * layout.grid 의 칸 종류(seat / void / x)에 맞게 X 표시를 넣고, 좌석 칸에는 번호·이름을 쓴다.
    * cells = [{no,name,picked}|null] (슬롯 순서) */
+  /* 양식보다 큰 배치도(행 7~8, 열 6~8): 표를 새로 만든다. 좌석·칸막이 칸은 양식의 칸을 복제하고, 글자는 칸 크기에 맞춰 줄인다. */
+  function expandTable(tblPara, layout) {
+    var tbl = descendants(tblPara, 'tbl')[0], tcs = descendants(tbl, 'tc');
+    function at(c, r) { return tcs.filter(function (tc) { var a = kids(tc, 'cellAddr')[0]; return +a.getAttribute('colAddr') === c && +a.getAttribute('rowAddr') === r; })[0]; }
+    var seatP = at(2, 1), gapP = at(1, 1);
+    if (!seatP || !gapP) throw new Error('양식에서 좌석 칸을 찾지 못했습니다.');
+    var sz = kids(tbl, 'sz')[0], W = +sz.getAttribute('width'), H = +sz.getAttribute('height');
+    var R = layout.rowCnt, K = layout.cols, gapW = 700;
+    var seatW = Math.floor((W - (K - 1) * gapW) / K), rowH = Math.floor(H / R);
+    var trs = kids(tbl, 'tr'), shell = trs[0].cloneNode(false);
+    trs.forEach(function (t) { tbl.removeChild(t); });
+    for (var r = 0; r < R; r++) {
+      var tr = shell.cloneNode(false);
+      for (var c = 0; c < layout.colCnt; c++) {
+        var tc = (c % 2 ? gapP : seatP).cloneNode(true), w = c % 2 ? gapW : seatW;
+        var a = kids(tc, 'cellAddr')[0]; a.setAttribute('colAddr', String(c)); a.setAttribute('rowAddr', String(r));
+        var cs = kids(tc, 'cellSz')[0]; cs.setAttribute('width', String(w)); cs.setAttribute('height', String(rowH));
+        descendants(tc, 'lineseg').forEach(function (ls) { ls.setAttribute('horzsize', String(Math.max(100, w - 282))); });
+        tr.appendChild(tc);
+      }
+      tbl.appendChild(tr);
+    }
+    tbl.setAttribute('rowCnt', String(R)); tbl.setAttribute('colCnt', String(layout.colCnt));
+    sz.setAttribute('width', String(seatW * K + gapW * (K - 1))); sz.setAttribute('height', String(rowH * R));
+    return Math.min(1, seatW / 9800, rowH / 8016);
+  }
   function fillSeats(tblPara, layout, cells, bank) {
+    var scale = layout.expand ? expandTable(tblPara, layout) : 1;
     var tbl = descendants(tblPara, 'tbl')[0];
     var tcs = descendants(tbl, 'tc');
     var slotAt = {}, proto = null;
@@ -151,6 +190,7 @@
         if (ps.length !== 2) { var nsub = proto.cloneNode(true); tc.replaceChild(nsub, sub); sub = nsub; ps = kids(sub, 'p'); }
         setText(ps[0], c ? String(c.no) : '');
         setText(ps[1], c ? c.name : '');
+        if (scale < 1) ps.forEach(function (pp) { kids(pp, 'run').forEach(function (rn) { rn.setAttribute('charPrIDRef', bank.sized(rn.getAttribute('charPrIDRef'), scale)); }); });
       }
       var ref = tc.getAttribute('borderFillIDRef');
       var nref = bank.get(ref, { slash: type === 'x' ? 'CENTER' : 'NONE', shade: type === 'seat' && c && c.picked ? (c.color || true) : false });

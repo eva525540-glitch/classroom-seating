@@ -107,7 +107,7 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
     const addedIds = [...hdrN.matchAll(/<hh:borderFill id="(\d+)"/g)].map(m => +m[1]).filter(id => id > BASE);
     assert.ok(addedIds.length > 0 && new Set(addedIds).size === addedIds.length);
     assert.equal(+hdrN.match(/<hh:borderFills[^>]*itemCnt="(\d+)"/)[1], BASE + addedIds.length);
-    assert.equal((hdrN.match(/faceColor="#D9ECFF"/g) || []).length, addedIds.length);
+    assert.equal((hdrN.match(/faceColor="#FFE6D8"/g) || []).length, addedIds.length);
     // 기존 서식은 그대로: 추가분을 빼고 itemCnt 를 되돌리면 원본과 같다
     let back = hdrN.replace(/<hh:borderFill id="(\d+)"[^>]*>[\s\S]*?<\/hh:borderFill>/g, (m, id) => +id > BASE ? '' : m);
     back = back.replace('<hh:borderFills itemCnt="' + (BASE + addedIds.length) + '"', '<hh:borderFills itemCnt="' + BASE + '"');
@@ -163,6 +163,28 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
     ok(v + ': 과목명 자간 -6 / -15 / -25 자동 선택, 글자 서식 추가만');
   }
 
+  // 8열 × 8행 직접 조정: 표를 그 크기로 새로 만든다
+  {
+    const types = core.defaultTypes(8, 8); types[0][0] = 'x';
+    const CL = core.customLayout(8, types, layouts.B.firstPageVposShift), TL = core.toTemplateLayout(CL, 5);
+    assert.equal(TL.expand, true); assert.equal(CL.seatCount, 63);
+    const tpl = fs.readFileSync(path.join(root, 'templates', 'seat-template-B.hwpx'));
+    const cells = Array.from({ length: 63 }, (_, i) => ({ no: i + 1, name: '이름' + (i + 1), picked: i < 5, color: '#D5EBE2' }));
+    const o = await hw.buildHwpx({ JSZip, DOMParser, XMLSerializer }, tpl, TL, [{ subject: '철학', cells }, { subject: '공통', cells }], { previewPng: PNG, titleInfo: core.titleInfo });
+    const zz = await JSZip.loadAsync(o), sx = await zz.file('Contents/section0.xml').async('string'), hx = await zz.file('Contents/header.xml').async('string');
+    const errs = []; [sx, hx].forEach(x => new DOMParser({ onError: (l, m) => { if (l !== 'warning') errs.push(m); } }).parseFromString(x, 'text/xml'));
+    assert.equal(errs.length, 0);
+    assert.equal((sx.match(/<hp:tbl /g) || []).length, 4);
+    assert.ok(/rowCnt="8" colCnt="15"/.test(sx));
+    assert.equal((sx.match(/<hp:tc /g) || []).length, 2 * (8 * 15) + 2 * 0 + (sx.match(/<hp:tc /g) || []).length - 2 * 120);
+    const t1 = sx.slice(sx.indexOf('<hp:tbl '), sx.indexOf('</hp:tbl>'));
+    assert.equal((t1.match(/<hp:tc /g) || []).length, 120);
+    assert.equal((t1.match(/<hp:t>이름\d+<\/hp:t>/g) || []).length, 63);
+    assert.equal(+hx.match(/<hh:charProperties[^>]*itemCnt="(\d+)"/)[1], (hx.match(/<hh:charPr id=/g) || []).length);
+    assert.ok(/faceColor="#D5EBE2"/.test(hx));
+    ok('8×8 직접 조정: 표 8행×15열 새로 생성, 좌석 63, 글자 서식 추가만');
+  }
+
   // 직접 만드는 배치도: X·빈칸·좌석을 마음대로, 모든 쪽이 같은 배치
   for (const cols of [4, 5]) {
     const L0 = layouts[cols === 4 ? 'A' : 'B'];
@@ -187,7 +209,7 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
     assert.ok(/<hh:slash type="CENTER"/.test(fillOf(at(0, 0))), 'X 칸에 대각선'); assert.equal(txt(at(0, 0)), '');
     assert.ok(/<hh:slash type="CENTER"/.test(fillOf(at((cols - 1) * 2, 5))), '오른쪽 아래 X');
     assert.ok(!/<hh:slash type="CENTER"/.test(fillOf(at(2, 2))), '빈칸에는 대각선 없음'); assert.equal(txt(at(2, 2)), '');
-    const s1 = at((cols - 1) * 2, 4); assert.equal(txt(s1), '1|이름1'); assert.ok(/#D9ECFF/.test(fillOf(s1)), '선택 학생 색');
+    const s1 = at((cols - 1) * 2, 4); assert.equal(txt(s1), '1|이름1'); assert.ok(/#FFE6D8/.test(fillOf(s1)), '선택 학생 색');
     // 양식에서 원래 빈칸/X였던 곳도 좌석이 되면 번호·이름이 들어가고 대각선이 없다
     const nat = cols === 4 ? at(4, 0) : at(cols === 5 ? 8 : 0, 1);
     assert.ok(/\|이름\d+$/.test(txt(nat)) || /^\d+\|이름\d+$/.test(txt(nat)), '원래 빈 칸이던 곳에 좌석: ' + txt(nat));

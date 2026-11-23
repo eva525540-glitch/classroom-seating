@@ -574,6 +574,7 @@
   /* 화면용 배치도(rows×cols)를 hwpx 양식 크기(6행 × tplCols열)의 배치도로 바꾼다.
    * 양식 표는 크기가 고정이라, 고른 크기는 오른쪽 아래(앞줄 쪽)에 놓고 나머지 칸은 비워 둔다. */
   function toTemplateLayout(L, tplCols) {
+    if (L.rowCnt > 6 || L.cols > 5) return Object.assign({}, L, { expand: true });   // 양식보다 크면 표를 그 크기로 새로 만든다
     var R = L.rowCnt, K = L.cols, ro = 6 - R, co = tplCols - K, grid = [], r, c;
     for (r = 0; r < 6; r++) { var row = []; for (c = 0; c < tplCols * 2 - 1; c++) row.push(c % 2 ? 'gap' : 'void'); grid.push(row); }
     for (r = 0; r < R; r++) for (c = 0; c < K * 2 - 1; c++) grid[r + ro][c + co * 2] = L.grid[r][c];
