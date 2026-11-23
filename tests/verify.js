@@ -163,6 +163,22 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
     ok(v + ': 과목명 자간 -6 / -15 / -25 자동 선택, 글자 서식 추가만');
   }
 
+  // 학생 + 선택과목이 한 표에 있는 명단(이동수업 명단) 자동 분류
+  {
+    const T = [['신학번', '이름', '탐구 
+A set', '반', '탐구 
+B set', '반', '비고'],
+      ['20101', '가', '과목1', '1', '과목2', '1', '특수'], ['20102', '나', '과목1', '1', '과목3', '6', ''],
+      ['20201', '다', '과목3', '9', '과목2', '2', '별도고사실'], ['', '', '', '', '', '', '']];
+    const r = core.parseCombinedRoster(T);
+    assert.equal(r.master.length, 3);
+    assert.deepEqual(r.master.map(m => m.grade + m.cls + m.no + m.kind), ['2학년1반1통합지원반', '2학년1반2', '2학년2반1별도고사실']);
+    assert.deepEqual(r.subjects.map(x => x.name + ':' + x.picks.length), ['과목1:2', '과목3:2', '과목2:2']);
+    assert.equal(r.special, 1);
+    assert.equal(core.parseCombinedRoster([['학년', '반', '번호', '이름'], ['1', '1', '1', '가']]), null);
+    ok('선택과목 명렬표 자동 분류: 학번→학년·반·번호, 과목 열만 인식, 특수→통합지원반');
+  }
+
   // 8열 × 8행 직접 조정: 표를 그 크기로 새로 만든다
   {
     const types = core.defaultTypes(8, 8); types[0][0] = 'x';

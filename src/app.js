@@ -134,6 +134,8 @@
       if (/\.xlsx?$/.test(name) && typeof XLSX !== 'undefined') {
         var wb0 = XLSX.read(buf, { type: 'array' });
         if (isWorkBook(wb0)) { restoreWork(wb0); return; }       // 이 앱에서 저장한 파일이면 작업 전체를 복원
+        var cr0 = combinedFromWorkbook(wb0);
+        if (cr0) { applyCombined(cr0); return; }                   // 학생 + 선택과목이 같이 있는 명단이면 자동 분류
       }
       var table = /\.xlsx?$/.test(name) ? sheetToTable(buf) : C.parseDelimited(decodeText(buf));
       addRowsFromMaster(tableToMaster(table));
@@ -406,6 +408,47 @@
     download(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }), name);
     var ok = $('subOk'); ok.textContent = name + ' 으로 저장했어요'; ok.classList.remove('hidden');
   }
+  /* ---------- 선택과목 명렬표 자동 분류 (학생 + 선택과목이 한 표에 있는 엑셀) ---------- */
+  function combinedFromWorkbook(wb) {
+    for (var i = 0; i < wb.SheetNames.length; i++) {
+      var t = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[i]], { header: 1, raw: false, defval: '' }), r = C.parseCombinedRoster(t);
+      if (r) return r;
+    }
+    return null;
+  }
+  function applyCombined(r) {
+    S.rows = r.master.map(function (m) { return { grade: m.grade.replace('학년', ''), cls: m.cls.replace('반', ''), no: m.no, name: m.name, kind: m.kind }; });
+    S.subjectsBy = {}; S.mergesBy = {}; S.mergeOpen = false; S.mergeIds = []; S.openSub = -1; S.undo = []; S.classKey = null;
+    r.subjects.forEach(function (sj) {                    // 학급마다 그 학급 학생이 고른 과목만, 파일에 나온 순서대로
+      var by = {};
+      sj.picks.forEach(function (pk) { (by[pk.key] = by[pk.key] || []).push(pk.no); });
+      Object.keys(by).forEach(function (k) {
+        (S.subjectsBy[k] = S.subjectsBy[k] || []).push({ id: 's' + (++nid), name: sj.name, nos: by[k].filter(function (n, i, a) { return a.indexOf(n) === i; }) });
+      });
+    });
+    renderMaster();
+    if (!applyMaster()) return false;
+    var keys = C.masterClassKeys(S.master).length;
+    var ok = $('subOk');
+    ok.textContent = '자동 분류했어요 · 학생 ' + S.master.length + '명 · 학급 ' + keys + '개 · 과목 ' + r.subjects.length + '개' +
+      (r.special ? ' · 비고의 “특수” ' + r.special + '명은 통합지원반(좌석 제외)으로 분류했어요. 01에서 바꿀 수 있어요' : '');
+    ok.classList.remove('hidden');
+    return true;
+  }
+  function loadCombinedFile(file) {
+    msg('subMsg', ''); $('subOk').classList.add('hidden');
+    var name = file.name.toLowerCase();
+    file.arrayBuffer().then(function (buf) {
+      var r;
+      if (/\.xlsx?$/.test(name)) {
+        if (typeof XLSX === 'undefined') throw new Error('엑셀 읽기 라이브러리를 불러오지 못했습니다.');
+        r = combinedFromWorkbook(XLSX.read(buf, { type: 'array' }));
+      } else r = C.parseCombinedRoster(C.parseDelimited(decodeText(buf)));
+      if (!r) throw new Error('학생과 선택과목을 나눌 수 없습니다. 머리글에 “학번”과 “이름”이 있고 과목 열이 있어야 해요.');
+      applyCombined(r);
+    }).catch(function (e) { msg('subMsg', '불러오지 못했습니다: ' + errText(e)); });
+  }
+
   function isWorkBook(wb) { return !!(wb.Sheets['선택과목'] && (wb.Sheets['학생명렬표'] || S.master)); }
   function restoreWork(wb) {
     var T = function (n) { return wb.Sheets[n] ? XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '' }) : []; };
@@ -443,7 +486,11 @@
     file.arrayBuffer().then(function (buf) {
       if (typeof XLSX === 'undefined') throw new Error('엑셀 읽기 라이브러리를 불러오지 못했습니다.');
       var wb = XLSX.read(buf, { type: 'array' });
-      if (!isWorkBook(wb)) throw new Error('이 앱에서 저장한 엑셀 파일이 아닙니다. (선택과목 시트가 없어요)');
+      if (!isWorkBook(wb)) {
+        var cr = combinedFromWorkbook(wb);
+        if (cr) { applyCombined(cr); return; }
+        throw new Error('이 앱에서 저장한 엑셀 파일이 아닙니다. (선택과목 시트가 없어요)');
+      }
       restoreWork(wb);
     }).catch(function (e) { msg('subMsg', '불러오지 못했습니다: ' + errText(e)); });
   }
@@ -812,6 +859,8 @@
     };
 
     // 선택과목 추가·학생 선택
+    $('btnAuto').onclick = function () { $('autoFile').click(); };
+    $('autoFile').onchange = function (e) { if (e.target.files[0]) loadCombinedFile(e.target.files[0]); e.target.value = ''; };
     $('btnSave').onclick = saveWork;
     $('btnLoad').onclick = function () { $('workFile').click(); };
     $('workFile').onchange = function (e) { if (e.target.files[0]) loadWorkFile(e.target.files[0]); e.target.value = ''; };

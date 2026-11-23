@@ -253,8 +253,8 @@ details[open]>summary::before{content:"▾"}
   <section id="sUpload">
     <div class="sh"><span class="n">02</span><h2>선택과목</h2>
       <span class="q" tabindex="0" data-tip="공통은 자동으로 만들어져요.&#10;과목을 추가하고 선택한 학생을 고르세요.">?</span>
-      <span class="tools"><button class="sub mini tipb tipr" id="btnSave" data-tip="학생 명렬표와 선택과목을 엑셀로 저장해요.&#10;나중에 불러와 이어서 작업할 수 있어요.">작업 저장</button><button class="sub mini tipb tipr" id="btnLoad" data-tip="저장한 작업 파일을 불러와&#10;이어서 작업해요.">작업 불러오기</button></span>
-      <input id="workFile" type="file" accept=".xlsx,.xls" hidden></div>
+      <span class="tools"><button class="sub mini tipb tipr" id="btnAuto" data-tip="학생과 선택과목이 함께 있는 엑셀을 올리면&#10;학생 명렬표와 선택과목으로 자동 분류해요.">명렬표 자동 분류</button><button class="sub mini tipb tipr" id="btnSave" data-tip="학생 명렬표와 선택과목을 엑셀로 저장해요.&#10;나중에 불러와 이어서 작업할 수 있어요.">작업 저장</button><button class="sub mini tipb tipr" id="btnLoad" data-tip="저장한 작업 파일을 불러와&#10;이어서 작업해요.">작업 불러오기</button></span>
+      <input id="workFile" type="file" accept=".xlsx,.xls" hidden><input id="autoFile" type="file" accept=".xlsx,.xls,.csv" hidden></div>
     <div class="addsub"><input id="subName" type="text" placeholder="과목명 (예: 물리학Ⅰ)" aria-label="과목명"><button id="btnAddSub">과목 추가</button></div>
     <div id="subMsg" class="warn hidden"></div>
     <div id="subOk" class="okline hidden"></div>
@@ -340,9 +340,9 @@ details[open]>summary::before{content:"▾"}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="src/data.js?v=mwtd28pg"></script>
-<script src="src/core.js?v=mwtd28pg"></script>
-<script src="src/hwpx.js?v=mwtd28pg"></script>
-<script src="src/app.js?v=mwtd28pg"></script>
+<script src="src/data.js?v=mwtdo1lu"></script>
+<script src="src/core.js?v=mwtdo1lu"></script>
+<script src="src/hwpx.js?v=mwtdo1lu"></script>
+<script src="src/app.js?v=mwtdo1lu"></script>
 </body>
 </html>

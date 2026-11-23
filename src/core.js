@@ -328,6 +328,57 @@
     if (!out.length) throw new Error('학생 행을 찾지 못했습니다.');
     return out;
   }
+  /* 학생과 선택과목이 한 표에 같이 있는 명단 (예: 이동수업 명단)을 학생 명렬표 + 선택과목으로 나눈다.
+   * 머리글에 학번(또는 신학번)과 이름이 있고, 과목 이름이 들어 있는 열이 하나 이상이면 이 형식으로 본다.
+   * 학번: 5자리 = 학년1·반2·번호2 (예 20101 → 2학년 1반 1번), 4자리 = 학년1·반1·번호2.
+   * 과목 열: 값이 글자인 열 (숫자만 있는 열 = 이동수업 반 등은 건너뜀). 비고의 '특수'는 통합지원반으로 본다. 없으면 null. */
+  function parseCombinedRoster(table) {
+    var hr = -1, ci = -1, ni = -1, r, c, clean = function (v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); };
+    for (r = 0; r < Math.min(table.length, 15) && hr < 0; r++) {
+      var row = table[r].map(clean), a = -1, b = -1;
+      row.forEach(function (h, i) { if (a < 0 && /^(신)?학번$/.test(h)) a = i; if (b < 0 && /^(이름|성명)$/.test(h)) b = i; });
+      if (a >= 0 && b >= 0) { hr = r; ci = a; ni = b; }
+    }
+    if (hr < 0) return null;
+    var head = table[hr].map(clean), ki = -1;
+    head.forEach(function (h, i) { if (ki < 0 && /비고|특이|구분/.test(h)) ki = i; });
+    var data = table.slice(hr + 1).filter(function (x) { return clean(x[ci]) || clean(x[ni]); });
+    if (!data.length) return null;
+    var cols = [];
+    for (c = 0; c < head.length; c++) {
+      if (c === ci || c === ni || c === ki) continue;
+      var vals = data.map(function (x) { return clean(x[c]); }).filter(Boolean);
+      if (!vals.length) continue;
+      var num = vals.filter(function (v) { return /^\d{1,3}$/.test(v); }).length;
+      if (num / vals.length < 0.5) cols.push(c);
+    }
+    if (!cols.length) return null;
+    var master = [], seen = {}, bad = 0, special = 0, byKey = {};
+    data.forEach(function (x) {
+      var id = clean(x[ci]).replace(/\D/g, ''), name = clean(x[ni]), g, cl, no;
+      if (id.length === 5) { g = id[0]; cl = +id.slice(1, 3); no = +id.slice(3); }
+      else if (id.length === 4) { g = id[0]; cl = +id[1]; no = +id.slice(2); }
+      if (!name || g == null || isNaN(no) || !no || !cl) { bad++; return; }
+      var key = g + '학년|' + cl + '반', dk = key + '|' + no;
+      if (seen[dk]) return; seen[dk] = 1;
+      var note = ki >= 0 ? clean(x[ki]) : '', kind = normKind(note);
+      if (!kind && /특수/.test(note)) { kind = '통합지원반'; special++; }
+      master.push({ grade: g + '학년', cls: cl + '반', no: no, name: name, kind: kind });
+      byKey[clean(x[ci]).replace(/\D/g, '')] = { key: key, no: no };
+    });
+    if (!master.length || bad > data.length / 2) return null;
+    var subjects = [], idx = {};
+    cols.forEach(function (c2) {
+      data.forEach(function (x) {
+        var nm = clean(x[c2]), st = byKey[clean(x[ci]).replace(/\D/g, '')];
+        if (!nm || !st || /^[-–—.x×]$|^없음$/i.test(nm)) return;
+        if (idx[nm] == null) { idx[nm] = subjects.length; subjects.push({ name: nm, picks: [] }); }
+        subjects[idx[nm]].picks.push(st);
+      });
+    });
+    if (!subjects.length) return null;
+    return { master: master, subjects: subjects, special: special };
+  }
   function masterClassKeys(master) {
     var seen = {}, out = [];
     master.forEach(function (r) {
@@ -606,7 +657,7 @@
     parseDelimited: parseDelimited, rowsToRoster: rowsToRoster, parseRosterText: parseRosterText,
     stripUnit: stripUnit, classKeys: classKeys, buildClass: buildClass, isExcluded: isExcluded, noteExcluded: noteExcluded,
     newPage: newPage, pageSeed: pageSeed, fillPage: fillPage, buildPages: buildPages,
-    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, parseTitle: parseTitle, parseJaeok: parseJaeok, lineToRow: lineToRow, parsePdfPages: parsePdfPages, matchPage: matchPage, mergePageSets: mergePageSets, matchPages: matchPages, defaultTypes: defaultTypes, resizeTypes: resizeTypes, customLayout: customLayout, toTemplateLayout: toTemplateLayout, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
+    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, parseTitle: parseTitle, parseJaeok: parseJaeok, lineToRow: lineToRow, parsePdfPages: parsePdfPages, matchPage: matchPage, mergePageSets: mergePageSets, matchPages: matchPages, defaultTypes: defaultTypes, resizeTypes: resizeTypes, customLayout: customLayout, toTemplateLayout: toTemplateLayout, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, parseCombinedRoster: parseCombinedRoster, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SeatCore = api;
