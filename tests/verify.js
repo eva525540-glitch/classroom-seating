@@ -13,9 +13,22 @@ let n = 0; const ok = (m) => console.log('  ✓', m, ++n);
 (async () => {
   const tr = core.textToRoster('2학년 | 3반 | 사회 | 미래사회와 기술 (3) | 17 | 소나윤 | 전출'+String.fromCharCode(10)+'제목 줄');
   assert.equal(tr.length, 1); assert.equal(tr[0].subjectRaw, '미래사회와 기술(3)'); assert.equal(tr[0].note, '전출'); ok('PDF 글자 한 줄 파싱');
-  const keys = core.classKeys(roster);
+  // 학생 명렬표(기준) + 선택과목 줄을 맞춰 보기
+  const kindOf = {}; roster.forEach(r => { if (r.note) kindOf[r.no] = core.normKind(r.note); });
+  const seenNo = {}, master = [];
+  roster.forEach(r => { if (!seenNo[r.no]) { seenNo[r.no] = 1; master.push({ grade: r.grade, cls: r.cls, no: r.no, name: r.name, kind: kindOf[r.no] || '' }); } });
+  const keys = core.masterClassKeys(master);
   assert.equal(keys.length, 1); assert.equal(keys[0].cls, '3반');
-  const cls = core.buildClass(roster, keys[0].key);
+  const entries = roster.map(r => ({ grade: r.grade, cls: r.cls, subject: core.stripUnit(r.subjectRaw), no: r.no, name: r.name }));
+  const mres = core.matchSelections(master, entries, keys[0].key);
+  assert.equal(mres.matched, 96); assert.equal(mres.unmatched, 0); assert.equal(mres.subjects.length, 12); ok('선택과목 줄 96개를 학생 명렬표와 맞춤');
+  // 틀린 이름·번호도 맞추기: 번호만 맞음 / 이름만 맞음(번호 없음) / 번호가 틀렸지만 이름이 거의 맞음
+  const noisy = core.matchSelections(master, [
+    { subject: '철학', no: 7, name: '신바나' }, { subject: '철학', no: '', name: '도민결' }, { subject: '철학', no: 15, name: '도민결' }, { subject: '철학', no: '', name: '' }
+  ], keys[0].key);
+  assert.deepEqual(noisy.subjects[0].nos.slice().sort((a, b) => a - b), [7, 16]); assert.equal(noisy.unmatched, 1); ok('틀린 글자 섞인 줄도 학생 명렬표로 바로잡음');
+  assert.equal(core.masterFromTable([['학년', '반', '번호', '이름', '구분'], ['2', '3', '1', '홍길동', '별도고사실'], ['', '', '', '', '']])[0].kind, '별도고사실'); ok('엑셀 양식 읽기');
+  const cls = core.buildClassFromMaster(master, keys[0].key, mres.subjects);
   const ctx = { seatCount: 21, excluded: (no) => core.isExcluded(cls.students[no], core.DEFAULT_KEYWORDS, {}) };
   const pages = core.buildPages(cls, ctx, 12345);
   assert.equal(pages.length, 13); ok('13쪽 생성(공통+12과목)');

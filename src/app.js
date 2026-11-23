@@ -8,9 +8,11 @@
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   var S = {
-    roster: null, classKey: null, cls: null,
-    mode: 'A',            // 'A' | 'B' | 'manual'
-    layout: 'A',          // 화면에 그리는 양식 (manual 일 때는 A/B 중 선택)
+    rows: [{ grade: '', cls: '', no: '', name: '', kind: '' }],   // 학생 명렬표(입력 중인 표)
+    master: null, dirty: true,                                      // 적용된 학생 명렬표
+    selEntries: null, matchInfo: null,                              // 선택과목 명렬표에서 읽은 줄
+    classKey: null, cls: null,
+    mode: 'A', layout: 'A',
     seed: 1, keywords: C.DEFAULT_KEYWORDS.slice(), sortSubjects: 'appear',
     manual: {}, pages: [], cur: 0, sel: -1, selPool: null, exportSel: {}, thumbs: false,
     history: [], future: []
@@ -27,54 +29,126 @@
     S.pages = o.pages; S.manual = o.manual; S.seed = o.seed; S.layout = o.layout; S.mode = o.mode; S.sel = -1; S.selPool = null;
     if (S.cur >= S.pages.length) S.cur = S.pages.length - 1;
   }
-  function cellsOf(pg) { return pg.seats.map(function (no) { return no == null ? null : { no: no, name: S.cls.students[no].name, picked: !pg.common && !!pg.pick && pg.pick.indexOf(no) >= 0 }; }); }
+  function isPicked(pg, no) { return !pg.common && !!pg.pick && pg.pick.indexOf(no) >= 0; }
+  function cellsOf(pg) { return pg.seats.map(function (no) { return no == null ? null : { no: no, name: S.cls.students[no].name, picked: isPicked(pg, no) }; }); }
   function unseated(pg) {
     var c = ctx();
     return pg.nos.filter(function (no) { return !c.excluded(no) && pg.seats.indexOf(no) < 0; });
   }
-
-  /* ---------- 작은 안내 ---------- */
-  function setStatus(msg, pct) {
-    $('status').textContent = msg || ''; $('status').classList.toggle('hidden', !msg);
+  function msg(id, text) { var el = $(id); el.textContent = text || ''; el.classList.toggle('hidden', !text); }
+  function setStatus(text, pct) {
+    $('status').textContent = text || ''; $('status').classList.toggle('hidden', !text);
     $('bar').classList.toggle('hidden', pct == null); if (pct != null) $('barI').style.width = Math.round(pct * 100) + '%';
   }
-  function showImportMsg(msg) { var el = $('importMsg'); el.textContent = msg || ''; el.classList.toggle('hidden', !msg); }
+  function download(bytes, name) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' })); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+  }
 
-  /* ---------- 불러오기 ---------- */
-  function loadRoster(rows) {
-    S.roster = rows;
-    var keys = C.classKeys(rows), sel = $('clsSel');
-    sel.innerHTML = keys.map(function (k) { return '<option value="' + esc(k.key) + '">' + esc(k.grade + ' ' + k.cls) + '</option>'; }).join('');
+  /* ---------- ① 학생 명렬표 입력 ---------- */
+  function renderMaster() {
+    var h = '<div class="mrow h"><span>학년</span><span>반</span><span>번호</span><span>이름</span><span>구분</span><span></span></div>';
+    S.rows.forEach(function (r, i) {
+      h += '<div class="mrow" data-i="' + i + '">' +
+        '<input data-f="grade" value="' + esc(r.grade) + '" placeholder="2" aria-label="학년">' +
+        '<input data-f="cls" value="' + esc(r.cls) + '" placeholder="3" aria-label="반">' +
+        '<input data-f="no" type="number" min="1" value="' + esc(r.no) + '" aria-label="번호">' +
+        '<input data-f="name" value="' + esc(r.name) + '" aria-label="이름">' +
+        '<select data-f="kind" aria-label="구분"><option value="">해당 없음</option>' + C.KINDS.map(function (k) { return '<option' + (r.kind === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' +
+        '<button data-del="' + i + '" title="줄 지우기" aria-label="줄 지우기">×</button></div>';
+    });
+    $('mtbl').innerHTML = h;
+  }
+  function addRow(focus) {
+    var last = S.rows[S.rows.length - 1] || {};
+    var n = parseInt(last.no, 10);
+    S.rows.push({ grade: last.grade || '', cls: last.cls || '', no: isNaN(n) ? '' : n + 1, name: '', kind: '' });
+    S.dirty = true;
+    renderMaster();
+    if (focus) { var el = $('mtbl').querySelector('[data-i="' + (S.rows.length - 1) + '"] [data-f="name"]'); if (el) el.focus(); }
+    $('mtbl').scrollTop = $('mtbl').scrollHeight;
+  }
+  function rowFilled(r) { return String(r.name || '').trim() || String(r.no == null ? '' : r.no).trim(); }
+  function addRowsFromMaster(list) {
+    var keep = S.rows.filter(rowFilled);
+    S.rows = keep.concat(list.map(function (m) { return { grade: m.grade.replace('학년', ''), cls: m.cls.replace('반', ''), no: m.no, name: m.name, kind: m.kind }; }));
+    if (!S.rows.length) S.rows = [{ grade: '', cls: '', no: '', name: '', kind: '' }];
+    S.dirty = true; renderMaster(); msg('masterMsg', '');
+  }
+  function tableToMaster(table) {
+    var first = (table[0] || []).map(function (h) { return String(h).trim(); });
+    if (first.indexOf('번호') >= 0 && (first.indexOf('이름') >= 0 || first.indexOf('성명') >= 0)) return C.masterFromTable(table);
+    // 머리글이 없으면 학년, 반, 번호, 이름, 구분 순서로 본다
+    return C.masterFromTable([['학년', '반', '번호', '이름', '구분']].concat(table));
+  }
+  function decodeText(buf) {
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) { return new TextDecoder('euc-kr').decode(buf); }
+  }
+  function sheetToTable(buf) {
+    if (typeof XLSX === 'undefined') throw new Error('엑셀 읽기 라이브러리를 불러오지 못했습니다. CSV로 저장해 올려 주세요.');
+    var wb = XLSX.read(buf, { type: 'array' });
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+  }
+  function readMasterFile(file) {
+    var name = file.name.toLowerCase();
+    file.arrayBuffer().then(function (buf) {
+      var table = /\.xlsx?$/.test(name) ? sheetToTable(buf) : C.parseDelimited(decodeText(buf));
+      addRowsFromMaster(tableToMaster(table));
+    }).catch(function (e) { msg('masterMsg', '불러오지 못했습니다: ' + e.message); });
+  }
+  function downloadTemplate() {
+    var NOTE = [['구분은 해당하는 학생만 고르세요 (통합지원반, 별도고사실, 전출, 자퇴).'], ['구분을 고른 학생은 좌석에서 제외됩니다.'], ['학년·반은 숫자만 써도 됩니다.']];
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js').then(function () {
+      var wb = new window.ExcelJS.Workbook(), ws = wb.addWorksheet('학생명렬표');
+      ws.columns = [{ header: '학년', width: 8 }, { header: '반', width: 8 }, { header: '번호', width: 8 }, { header: '이름', width: 16 }, { header: '구분', width: 16 }];
+      ws.getRow(1).font = { bold: true };
+      for (var r = 2; r <= 101; r++) ws.getCell('E' + r).dataValidation = { type: 'list', allowBlank: true, formulae: ['"' + C.KINDS.join(',') + '"'] };
+      var w2 = wb.addWorksheet('안내'); NOTE.forEach(function (l) { w2.addRow(l); }); w2.getColumn(1).width = 70;
+      return wb.xlsx.writeBuffer();
+    }).catch(function () {
+      // 인터넷이 없으면 선택 목록 없는 기본 양식
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['학년', '반', '번호', '이름', '구분']]), '학생명렬표');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(NOTE), '안내');
+      return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    }).then(function (buf) { download(buf, '학생명렬표_양식.xlsx'); });
+  }
+
+  /* 입력 표 → 적용 */
+  function collectMaster() {
+    var errs = [], valid = [], seen = {};
+    S.rows.forEach(function (r, i) {
+      if (!rowFilled(r)) return;
+      var name = String(r.name || '').trim(), no = parseInt(String(r.no == null ? '' : r.no).trim(), 10);
+      if (isNaN(no) || !name) { errs.push((i + 1) + '번째 줄은 번호와 이름을 모두 입력해야 합니다'); return; }
+      var g = C.normGrade(r.grade), c = C.normCls(r.cls), key = g + '|' + c + '|' + no;
+      if (seen[key]) { errs.push((i + 1) + '번째 줄의 번호가 겹칩니다'); return; }
+      seen[key] = 1; valid.push({ grade: g, cls: c, no: no, name: name, kind: r.kind || '' });
+    });
+    return { valid: valid, errs: errs };
+  }
+  function applyMaster() {
+    var res = collectMaster();
+    if (res.errs.length) { msg('masterMsg', res.errs.slice(0, 4).join(' · ') + (res.errs.length > 4 ? ' 외 ' + (res.errs.length - 4) + '곳' : '')); return false; }
+    if (!res.valid.length) { msg('masterMsg', '학생을 한 명 이상 입력하세요.'); return false; }
+    msg('masterMsg', '');
+    S.master = res.valid; S.dirty = false;
+    var keys = C.masterClassKeys(S.master), sel = $('clsSel');
+    sel.innerHTML = keys.map(function (k) { return '<option value="' + esc(k.key) + '">' + esc((k.grade + ' ' + k.cls).trim() || '학급') + '</option>'; }).join('');
     sel.parentNode.classList.toggle('hidden', keys.length <= 1);
-    showImportMsg(''); setStatus(rows.length + '개 행을 불러왔습니다.', null);
-    $('review').classList.add('hidden');
-    startClass(keys[0].key);
-  }
-  function newPages() {
-    var pages = C.buildPages(S.cls, ctx(), S.seed);
-    if (S.mode === 'manual') pages.forEach(function (p) { p.seats = new Array(SEATS).fill(null); p.overflow = []; p.locked = []; });
-    return pages;
-  }
-  function resetExportSel() { S.exportSel = {}; S.pages.forEach(function (_, i) { S.exportSel[i] = true; }); }
-  function startClass(key) {
-    S.classKey = key; S.manual = {}; S.history = []; S.future = []; S.sel = -1; S.selPool = null; S.cur = 0;
-    S.cls = C.buildClass(S.roster, key, { sortSubjects: S.sortSubjects });
-    S.pages = newPages(); resetExportSel();
-    $('sWork').classList.remove('hidden'); $('sExp').classList.remove('hidden');
-    render();
-  }
-  function rebuildAll() {
-    if (!S.cls) return;
-    push();
-    S.cls = C.buildClass(S.roster, S.classKey, { sortSubjects: S.sortSubjects });
-    S.pages = newPages(); resetExportSel(); S.cur = 0; S.sel = -1; S.selPool = null;
-    render();
+    var key = keys.some(function (k) { return k.key === S.classKey; }) ? S.classKey : keys[0].key;
+    sel.value = key;
+    startClass(key);
+    return true;
   }
 
+  /* ---------- ② 선택과목 명렬표 ---------- */
   var libs = {};
   function loadScript(src) {
     if (!libs[src]) libs[src] = new Promise(function (res, rej) {
-      var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.')); };
+      var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { delete libs[src]; rej(new Error('라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.')); };
       document.head.appendChild(s);
     });
     return libs[src];
@@ -90,6 +164,7 @@
     });
     return lines.map(function (l) { l.a.sort(function (p, q) { return p.x - q.x; }); return l.a.map(function (i) { return i.s; }).join(' '); }).join('\n');
   }
+  /* PDF → 표의 줄들 ({grade, cls, subjectRaw, no, name}) */
   async function readPdf(file) {
     setStatus('PDF를 읽는 중…', 0.05);
     await loadScript(PDFJS + 'pdf.min.js');
@@ -99,10 +174,10 @@
     for (p = 1; p <= n; p++) {
       var pg = await doc.getPage(p);
       pages.push(pageLines(await pg.getTextContent()));
-      setStatus('글자 읽는 중… ' + p + ' / ' + n, p / n * 0.3);
+      setStatus('표를 읽는 중… ' + p + ' / ' + n, p / n * 0.3);
     }
     var res = C.pagesToRoster(pages);
-    if (res.rows.length) return { rows: res.rows, text: pages.join('\n'), lenient: res.lenient };
+    if (res.rows.length) return res.rows;
     // 글자 층이 없는 스캔본 → 화면 속 글자를 인식한다(OCR)
     setStatus('스캔본으로 보여 글자 인식을 준비하는 중… (처음 한 번 데이터를 내려받습니다)', 0.3);
     await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
@@ -113,59 +188,62 @@
       var page = await doc.getPage(p), vp = page.getViewport({ scale: 3 });
       var cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
       await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
-      var r = await worker.recognize(cv);
-      pages.push(r.data.text);
-      setStatus('글자 인식 중… ' + p + ' / ' + n, 0.3 + p / n * 0.7);
+      pages.push((await worker.recognize(cv)).data.text);
+      setStatus('표를 읽는 중… ' + p + ' / ' + n, 0.3 + p / n * 0.7);
     }
     await worker.terminate();
-    res = C.pagesToRoster(pages);
-    return { rows: res.rows, text: pages.join('\n'), lenient: true, ocr: true };
+    return C.pagesToRoster(pages).rows;
   }
-  function showReview(res) {
-    setStatus('', null);
-    $('reviewTxt').value = res.rows.length ? C.rosterToTSV(res.rows) : res.text;
-    var msg;
-    if (!res.rows.length) msg = '(표로 읽지 못했습니다. 아래 글자를 한 줄에 “학년 반 편제명 개설과목 번호 성명 비고” 순서로 고쳐 주세요)';
-    else if (res.lenient) msg = '(' + res.rows.length + '행 · 글자 인식이 정확하지 않을 수 있습니다. 번호와 이름을 꼭 확인해 고치세요)';
-    else msg = '(' + res.rows.length + '행 인식)';
-    $('reviewCnt').textContent = msg;
-    $('review').classList.remove('hidden');
-    showImportMsg('');
+  function toEntries(rows) {
+    return rows.map(function (r) { return { grade: r.grade, cls: r.cls, subject: C.stripUnit(r.subjectRaw), no: r.no, name: r.name }; });
   }
-  function confirmReview() {
-    var t = $('reviewTxt').value, rows;
-    try {
-      var first = t.split(/\r?\n/, 1)[0];
-      if (/학년/.test(first) && /성명/.test(first)) {
-        var table = C.parseDelimited(t), head = table[0].map(function (h) { return h.trim(); });
-        var ni = head.indexOf('번호'), mi = head.indexOf('성명'), bad = [];
-        table.slice(1).forEach(function (r, i) { if (!/^[0-9]+$/.test((r[ni] || '').trim()) || !(r[mi] || '').trim()) bad.push(i + 2); });
-        if (bad.length) throw new Error('번호나 성명이 비어 있는 줄이 있습니다 (' + bad.slice(0, 8).join(', ') + '번째 줄' + (bad.length > 8 ? ' 외 ' + (bad.length - 8) + '곳' : '') + '). 채우거나 지워 주세요.');
-        rows = C.rowsToRoster(table);
-      } else rows = C.pagesToRoster([t]).rows.filter(function (r) { return r.no !== '' && r.name; });
-      if (!rows.length) throw new Error('학생 행을 찾지 못했습니다.');
-      loadRoster(rows);
-    } catch (e) { showImportMsg('불러오지 못했습니다: ' + e.message); }
+  function loadSelections(entries) {
+    if (!entries.length) { msg('importMsg', '표에서 학생 줄을 찾지 못했습니다. 엑셀(CSV)로 올려 보세요.'); return; }
+    S.selEntries = entries;
+    msg('importMsg', '');
+    if (!S.master || S.dirty) { if (!applyMaster()) return; } else startClass(S.classKey);
   }
   function readFile(file) {
-    var name = file.name.toLowerCase();
-    showImportMsg('');
-    var job;
-    if (/\.pdf$/.test(name)) job = readPdf(file).then(showReview);
+    if (!collectMaster().valid.length) { msg('importMsg', '먼저 위의 학생 명렬표를 입력하세요.'); return; }
+    var name = file.name.toLowerCase(), job;
+    msg('importMsg', '');
+    if (/\.pdf$/.test(name)) job = readPdf(file).then(function (rows) { setStatus('', null); loadSelections(toEntries(rows)); });
     else job = file.arrayBuffer().then(function (buf) {
-      var rows;
-      if (/\.xlsx?$/.test(name)) {
-        if (typeof XLSX === 'undefined') throw new Error('엑셀 읽기 라이브러리를 불러오지 못했습니다. CSV로 저장해 올려 주세요.');
-        var wb = XLSX.read(buf, { type: 'array' }), ws = wb.Sheets[wb.SheetNames[0]];
-        rows = C.rowsToRoster(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }));
-      } else {
-        var text;
-        try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) { text = new TextDecoder('euc-kr').decode(buf); }
-        rows = C.parseRosterText(text);
-      }
-      loadRoster(rows);
+      var rows = /\.xlsx?$/.test(name) ? C.rowsToRoster(sheetToTable(buf)) : C.parseRosterText(decodeText(buf));
+      loadSelections(toEntries(rows));
     });
-    job.catch(function (e) { setStatus('', null); showImportMsg('불러오지 못했습니다: ' + e.message); });
+    job.catch(function (e) { setStatus('', null); msg('importMsg', '불러오지 못했습니다: ' + e.message); });
+  }
+
+  /* ---------- 반 시작 / 재생성 ---------- */
+  function makeCls(key) {
+    var subs = S.matchInfo ? S.matchInfo.subjects : [];
+    return C.buildClassFromMaster(S.master, key, subs, { sortSubjects: S.sortSubjects });
+  }
+  function newPages() {
+    var pages = C.buildPages(S.cls, ctx(), S.seed);
+    if (S.mode === 'manual') pages.forEach(function (p) { p.seats = new Array(SEATS).fill(null); p.overflow = []; p.locked = []; });
+    return pages;
+  }
+  function resetExportSel() { S.exportSel = {}; S.pages.forEach(function (_, i) { S.exportSel[i] = true; }); }
+  function startClass(key) {
+    S.classKey = key; S.manual = {}; S.history = []; S.future = []; S.sel = -1; S.selPool = null; S.cur = 0;
+    S.matchInfo = S.selEntries ? C.matchSelections(S.master, S.selEntries, key) : null;
+    S.cls = makeCls(key);
+    S.pages = newPages(); resetExportSel();
+    $('sWork').classList.remove('hidden'); $('sExp').classList.remove('hidden');
+    if (S.matchInfo) {
+      var m = S.matchInfo;
+      setStatus('선택과목 ' + m.subjects.length + '개 · 학생 ' + m.matched + '명 연결' + (m.unmatched ? ' · 연결하지 못한 줄 ' + m.unmatched + '개' : '') + (m.skipped ? ' · 다른 반 ' + m.skipped + '줄 제외' : ''), null);
+    } else setStatus('', null);
+    render();
+  }
+  function rebuildAll() {
+    if (!S.cls) return;
+    push();
+    S.cls = makeCls(S.classKey);
+    S.pages = newPages(); resetExportSel(); S.cur = 0; S.sel = -1; S.selPool = null;
+    render();
   }
 
   /* ---------- 좌석표 HTML ---------- */
@@ -182,7 +260,7 @@
         else {
           var i = sm[r + ',' + c], no = pg.seats[i], blocked = pg.blocked.indexOf(i) >= 0;
           var locked = no != null && pg.locked.indexOf(no) >= 0;
-          var cls = 'seat' + (no == null && !blocked ? ' empty' : '') + (locked ? ' locked' : '') + (blocked ? ' blocked' : '') + (no != null && !pg.common && pg.pick && pg.pick.indexOf(no) >= 0 ? ' picked' : '') + (opt.sel === i ? ' sel' : '');
+          var cls = 'seat' + (no == null && !blocked ? ' empty' : '') + (locked ? ' locked' : '') + (blocked ? ' blocked' : '') + (no != null && isPicked(pg, no) ? ' picked' : '') + (opt.sel === i ? ' sel' : '');
           var inner = '<span class="slot">' + (i + 1) + '</span>';
           if (blocked) inner += '<span class="nm">비움</span>';
           else if (no != null) inner += '<span class="no">' + no + '</span><span class="nm">' + esc(S.cls.students[no].name) + '</span>' + (locked ? '<span class="tag">●</span>' : '');
@@ -217,12 +295,9 @@
   function setMode(m) {
     if (m === S.mode) return;
     if (S.cls) push();
-    var prev = S.mode;
     S.mode = m;
     if (m !== 'manual') S.layout = m;
-    if (S.cls) {
-      S.pages = newPages(); resetExportSel(); S.cur = 0; S.sel = -1; S.selPool = null;
-    }
+    if (S.cls) { S.pages = newPages(); resetExportSel(); S.cur = 0; S.sel = -1; S.selPool = null; }
     render();
   }
 
@@ -277,23 +352,25 @@
     if (S.sel >= 0) {
       var no = pg.seats[S.sel], blocked = pg.blocked.indexOf(S.sel) >= 0;
       bar += '<b>슬롯 ' + (S.sel + 1) + (no != null ? ' · ' + no + ' ' + esc(S.cls.students[no].name) : blocked ? ' · 비움' : ' · 빈자리') + '</b>';
-      if (no != null) bar += '<button class="sub" data-act="lock">' + (pg.locked.indexOf(no) >= 0 ? '고정 해제' : '고정') + '</button><button class="sub" data-act="unseat">자리 빼기</button>';
+      if (no != null) bar += '<button class="sub" data-act="lock">' + (pg.locked.indexOf(no) >= 0 ? '고정 해제' : '고정') + '</button><button class="sub" data-act="unseat">자리 빼기</button><button class="sub" data-act="rename">이름 수정</button>';
       bar += '<button class="sub" data-act="block">' + (blocked ? '비움 해제' : '좌석 비우기') + '</button>';
       if (no != null) bar += '<button class="sub" data-act="excl">제외</button>';
       bar += '<button class="sub" data-act="desel">취소</button>';
     }
     $('selbar').innerHTML = bar;
     $('pgSeed').value = pg.seed; $('pgSeed').disabled = pg.common; $('btnReshuffle').disabled = pg.common;
+    $('namePanel').classList.toggle('hidden', pg.common); $('pgName').value = pg.subject;
     var pool = unseated(pg);
     $('poolPanel').classList.toggle('hidden', !(man || pool.length));
-    $('pool').innerHTML = pool.map(function (n) { return '<span class="chip' + (S.selPool === n ? ' sel' : '') + (!pg.common && pg.pick && pg.pick.indexOf(n) >= 0 ? ' picked' : '') + '" draggable="true" data-pool="' + n + '"><i>' + n + '</i>' + esc(S.cls.students[n].name) + '</span>'; }).join('') || '<span style="color:var(--mute);font-size:.82rem">모두 배치됨</span>';
+    $('pool').innerHTML = pool.map(function (n) { return '<span class="chip' + (S.selPool === n ? ' sel' : '') + (isPicked(pg, n) ? ' picked' : '') + '" draggable="true" data-pool="' + n + '"><i>' + n + '</i>' + esc(S.cls.students[n].name) + '</span>'; }).join('') || '<span style="color:var(--mute);font-size:.82rem">모두 배치됨</span>';
     renderStudents(pg);
   }
   function renderStudents(pg) {
     var c = ctx();
     $('stulist').innerHTML = S.cls.studentList.map(function (s) {
-      var ex = c.excluded(s.no), on = pg.nos.indexOf(s.no) >= 0;
-      return '<label><input type="checkbox" data-stu="' + s.no + '"' + (ex ? '' : ' checked') + '><span class="' + (ex ? 'ex' : '') + '">' + (on ? '● ' : '') + s.no + ' ' + esc(s.name) + '</span>' + (s.notes.length ? '<span class="nt">' + esc(s.notes.join(',')) + '</span>' : '') + '</label>';
+      var ex = c.excluded(s.no);
+      return '<div class="rw"><label><input type="checkbox" data-stu="' + s.no + '"' + (ex ? '' : ' checked') + '><span class="' + (ex ? 'ex' : '') + '">' + s.no + ' ' + esc(s.name) + '</span>' + (s.kind ? '<span class="nt">' + esc(s.kind) + '</span>' : '') + '</label>' +
+        (pg.common ? '' : '<button class="pk' + (isPicked(pg, s.no) ? ' on' : '') + '" data-pick="' + s.no + '" title="이 과목 선택 학생" aria-label="이 과목 선택 학생"></button>') + '</div>';
     }).join('');
   }
 
@@ -349,18 +426,28 @@
     S.pages.forEach(function (p) { C.applyExclusion(p, no, excluded, ctx()); });
     S.sel = -1; render();
   }
+  function togglePick(no) {
+    var pg = cur(); if (pg.common) return;
+    push();
+    var i = pg.pick.indexOf(no);
+    if (i >= 0) pg.pick.splice(i, 1); else pg.pick.push(no);
+    render();
+  }
+  function renameStudent(no) {
+    var s = S.cls.students[no], v = window.prompt('이름 수정 (' + no + '번)', s.name);
+    if (v == null) return;
+    v = v.trim(); if (!v || v === s.name) return;
+    s.name = v;
+    S.master.forEach(function (m) { if (m.grade + '|' + m.cls === S.classKey && m.no === no) m.name = v; });
+    S.rows.forEach(function (r) { if (C.normGrade(r.grade) + '|' + C.normCls(r.cls) === S.classKey && parseInt(r.no, 10) === no) r.name = v; });
+    renderMaster(); render();
+  }
   function applySeed() {
     S.pages.forEach(function (p, i) { if (!p.common) C.reshuffle(p, C.pageSeed(S.seed, i), ctx()); });
     S.sel = -1; render();
   }
 
   /* ---------- 내보내기 ---------- */
-  function download(bytes, name) {
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' })); a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-  }
   function drawPreview(pg) {
     var cv = document.createElement('canvas'); cv.width = 724; cv.height = 1024;
     var g = cv.getContext('2d'), L = LAYOUTS[S.layout];
@@ -394,12 +481,12 @@
   function b64ToBytes(b64) { var bin = atob(b64), u = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
   function selectedIdx() { return S.pages.map(function (_, i) { return i; }).filter(function (i) { return S.exportSel[i]; }); }
   function doExport() {
-    var idx = selectedIdx(), msg = $('expMsg');
-    if (!idx.length) { msg.textContent = '내보낼 쪽을 하나 이상 선택하세요.'; return; }
+    var idx = selectedIdx(), out = $('expMsg');
+    if (!idx.length) { out.textContent = '내보낼 쪽을 하나 이상 선택하세요.'; return; }
     var bad = idx.filter(function (i) { var p = S.pages[i]; return p.overflow.length || (S.mode === 'manual' && unseated(p).length); });
     if (bad.length && !confirm('앉지 못한 학생이 있는 쪽이 있습니다 (' + bad.map(function (i) { return S.pages[i].subject; }).join(', ') + '). 그래도 내보낼까요?')) return;
     var sel = idx.map(function (i) { return S.pages[i]; });
-    msg.textContent = '만드는 중…';
+    out.textContent = '만드는 중…';
     drawPreview(sel[0]).then(function (png) {
       return H.buildHwpx({ JSZip: window.JSZip, DOMParser: window.DOMParser, XMLSerializer: window.XMLSerializer },
         b64ToBytes(D.templates[S.layout]), LAYOUTS[S.layout],
@@ -408,8 +495,8 @@
       var g = (S.cls.grade.match(/\d+/) || [''])[0], c = (S.cls.cls.match(/\d+/) || [''])[0];
       var name = (g && c ? g + '-' + c + '_' : '') + '고사좌석배치표.hwpx';
       download(bytes, name);
-      msg.textContent = name + ' · ' + sel.length + '쪽';
-    }).catch(function (e) { msg.textContent = '내보내기 실패: ' + e.message; });
+      out.textContent = name + ' · ' + sel.length + '쪽';
+    }).catch(function (e) { out.textContent = '내보내기 실패: ' + e.message; });
   }
   function doPrint() {
     $('printArea').innerHTML = selectedIdx().map(function (i) { return '<div class="pp"><div class="paper">' + paperHtml(S.pages[i], { sel: -1 }) + '</div></div>'; }).join('');
@@ -421,6 +508,37 @@
   function seatOf(e) { var el = e.target.closest('.seat'); return el ? +el.dataset.slot : -1; }
   function clearOver() { Array.prototype.forEach.call(document.querySelectorAll('.over'), function (x) { x.classList.remove('over'); }); }
   function bind() {
+    // 학생 명렬표 입력
+    var mt = $('mtbl');
+    function onEdit(e) {
+      var row = e.target.closest('[data-i]'), f = e.target.dataset && e.target.dataset.f; if (!row || !f) return;
+      S.rows[+row.dataset.i][f] = e.target.value; S.dirty = true;
+    }
+    mt.addEventListener('input', onEdit); mt.addEventListener('change', onEdit);
+    mt.addEventListener('click', function (e) {
+      var d = e.target.dataset && e.target.dataset.del; if (d == null || d === '') return;
+      S.rows.splice(+d, 1); if (!S.rows.length) S.rows.push({ grade: '', cls: '', no: '', name: '', kind: '' });
+      S.dirty = true; renderMaster();
+    });
+    mt.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || !e.target.dataset || e.target.dataset.f !== 'name') return;
+      var row = e.target.closest('[data-i]'); if (!row) return;
+      e.preventDefault();
+      if (+row.dataset.i === S.rows.length - 1) addRow(true);
+      else { var nx = mt.querySelector('[data-i="' + (+row.dataset.i + 1) + '"] [data-f="name"]'); if (nx) nx.focus(); }
+    });
+    $('btnAddRow').onclick = function () { addRow(true); };
+    $('btnApply').onclick = applyMaster;
+    $('btnTpl').onclick = downloadTemplate;
+    $('btnMasterFile').onclick = function () { $('masterFile').click(); };
+    $('masterFile').onchange = function (e) { if (e.target.files[0]) readMasterFile(e.target.files[0]); e.target.value = ''; };
+    $('lnkPaste').onclick = function () { $('pasteBox').classList.toggle('hidden'); };
+    $('btnPaste').onclick = function () {
+      try { addRowsFromMaster(tableToMaster(C.parseDelimited($('paste').value))); $('paste').value = ''; $('pasteBox').classList.add('hidden'); }
+      catch (e) { msg('masterMsg', '불러오지 못했습니다: ' + e.message); }
+    };
+
+    // 선택과목 명렬표 올리기
     var drop = $('drop'), file = $('file');
     drop.onclick = function () { file.click(); };
     drop.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } };
@@ -428,10 +546,6 @@
     ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('on'); }); });
     ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('on'); }); });
     drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files[0]; if (f) readFile(f); });
-    $('lnkPaste').onclick = function () { $('pasteBox').classList.toggle('hidden'); };
-    $('btnPaste').onclick = function () { try { loadRoster(C.parseRosterText($('paste').value)); } catch (e) { showImportMsg('불러오지 못했습니다: ' + e.message); } };
-    $('btnReviewOk').onclick = confirmReview;
-    $('btnReviewNo').onclick = function () { $('review').classList.add('hidden'); setStatus('', null); };
 
     $('modes').onclick = function (e) { var b = e.target.closest('[data-m]'); if (b) setMode(b.dataset.m); };
     $('layoutSeg').onclick = function (e) {
@@ -444,6 +558,10 @@
     $('btnReseedAll').onclick = function () { push(); S.seed = Math.floor(Math.random() * 1e9); applySeed(); };
     $('btnReshuffle').onclick = function () { var pg = cur(); if (pg.common) return; push(); C.reshuffle(pg, Math.floor(Math.random() * 1e9), ctx()); S.sel = -1; render(); };
     $('pgSeed').onchange = function (e) { var pg = cur(); if (pg.common) return; push(); C.reshuffle(pg, parseInt(e.target.value, 10) || 0, ctx()); S.sel = -1; render(); };
+    $('pgName').onchange = function (e) {
+      var pg = cur(), v = e.target.value.trim(); if (pg.common || !v || v === pg.subject) { e.target.value = pg.subject; return; }
+      push(); pg.subject = v; render();
+    };
 
     $('tabs').onclick = function (e) {
       var exp = e.target.dataset && e.target.dataset.exp;
@@ -498,15 +616,18 @@
       if (a === 'lock') toggleLock();
       else if (a === 'block') toggleBlock();
       else if (a === 'unseat') unseat(S.sel);
+      else if (a === 'rename') { var rn = cur().seats[S.sel]; if (rn != null) renameStudent(rn); }
       else if (a === 'excl') { var no = cur().seats[S.sel]; if (no != null) setExcluded(no, true); }
       else if (a === 'desel') { S.sel = -1; render(); }
     };
     $('stulist').onchange = function (e) { var no = e.target.dataset && e.target.dataset.stu; if (no != null) setExcluded(+no, !e.target.checked); };
+    $('stulist').onclick = function (e) { var b = e.target.closest('[data-pick]'); if (b) togglePick(+b.dataset.pick); };
     $('btnExport').onclick = doExport;
     $('btnPrint').onclick = doPrint;
     $('btnAll').onclick = function () { resetExportSel(); renderTabs(); };
     $('btnNone').onclick = function () { S.exportSel = {}; renderTabs(); };
   }
   bind();
+  renderMaster();
   renderModes();
 })();

@@ -294,6 +294,92 @@
     return { rows: rows, lenient: lenient };
   }
 
+  /* ---------- 학생 명렬표(기준) + 선택과목 명렬표 맞춰 보기 ----------
+   * 학생 명렬표: [{grade, cls, no, name, kind}]  kind = '' | 통합지원반 | 별도고사실 | 전출 | 자퇴
+   * 이름과 번호는 항상 학생 명렬표의 것을 쓴다. 선택과목 쪽(PDF 등)에서는 "누가 선택했는가"만 얻는다. */
+  var KINDS = ['통합지원반', '별도고사실', '전출', '자퇴'];
+  function normGrade(s) { var m = /(\d+)/.exec(String(s == null ? '' : s)); return m ? m[1] + '학년' : ''; }
+  function normCls(s) { var m = /(\d+)/.exec(String(s == null ? '' : s)); return m ? m[1] + '반' : ''; }
+  function normKind(s) {
+    s = String(s == null ? '' : s).trim();
+    if (!s) return '';
+    for (var i = 0; i < KINDS.length; i++) if (s.indexOf(KINDS[i]) >= 0) return KINDS[i];
+    if (/지원/.test(s)) return '통합지원반';
+    if (/별도|고사실/.test(s)) return '별도고사실';
+    return '';
+  }
+  /* 표(2차원 배열, 첫 줄 머리글) → 학생 명렬표. 머리글: 학년, 반, 번호, 이름(또는 성명), 구분(또는 비고) */
+  function masterFromTable(table) {
+    if (!table.length) throw new Error('내용이 비어 있습니다.');
+    var head = table[0].map(function (h) { return String(h == null ? '' : h).replace(/^﻿/, '').trim(); });
+    function find() { for (var a = 0; a < arguments.length; a++) { var i = head.indexOf(arguments[a]); if (i >= 0) return i; } return -1; }
+    var gi = find('학년'), ci = find('반'), ni = find('번호'), mi = find('이름', '성명'), ki = find('구분', '비고');
+    if (ni < 0 || mi < 0) throw new Error('머리글에 “번호”와 “이름”이 있어야 합니다. 엑셀 양식을 내려받아 사용하세요.');
+    var out = [];
+    table.slice(1).forEach(function (r) {
+      var no = parseInt(String(r[ni] == null ? '' : r[ni]).trim(), 10), name = String(r[mi] == null ? '' : r[mi]).trim();
+      if (isNaN(no) || !name) return;
+      out.push({ grade: gi < 0 ? '' : normGrade(r[gi]), cls: ci < 0 ? '' : normCls(r[ci]), no: no, name: name, kind: ki < 0 ? '' : normKind(r[ki]) });
+    });
+    if (!out.length) throw new Error('학생 행을 찾지 못했습니다.');
+    return out;
+  }
+  function masterClassKeys(master) {
+    var seen = {}, out = [];
+    master.forEach(function (r) {
+      var k = r.grade + '|' + r.cls;
+      if (!seen[k]) { seen[k] = 1; out.push({ key: k, grade: r.grade, cls: r.cls }); }
+    });
+    return out;
+  }
+  /* 한글 자모 단위 비슷한 정도 (0~1) — 글자 인식이 틀린 이름도 어느 정도 맞춘다 */
+  function jamoSim(a, b) {
+    a = String(a || '').normalize('NFD'); b = String(b || '').normalize('NFD');
+    if (!a.length || !b.length) return 0;
+    var prev = [], cur = [], i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur = [i];
+      for (j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return 1 - prev[b.length] / Math.max(a.length, b.length);
+  }
+  /* entries: [{grade, cls, subject, no, name}] (번호·이름은 틀리거나 비어 있을 수 있음) */
+  function matchSelections(master, entries, classKey) {
+    var rows = master.filter(function (r) { return r.grade + '|' + r.cls === classKey; });
+    var multi = masterClassKeys(master).length > 1;
+    var order = [], map = {}, matched = 0, unmatched = 0, skipped = 0;
+    entries.forEach(function (e) {
+      if (multi && e.cls) {
+        var key = (e.grade || (rows[0] && rows[0].grade) || '') + '|' + e.cls;
+        if (key !== classKey) { skipped++; return; }
+      }
+      var best = null, bestScore = 0;
+      rows.forEach(function (r) {
+        var noOk = e.no !== '' && e.no != null && Number(e.no) === r.no;
+        var score = (noOk ? 0.4 : 0) + 0.6 * jamoSim(e.name, r.name);
+        if (score > bestScore) { bestScore = score; best = r; }
+      });
+      if (!best || bestScore < 0.45) { unmatched++; return; }
+      var subj = stripUnit(e.subject || '') || '(과목 미확인)';
+      if (!map[subj]) { map[subj] = { subject: subj, raw: subj, group: '', nos: [] }; order.push(subj); }
+      if (map[subj].nos.indexOf(best.no) < 0) { map[subj].nos.push(best.no); matched++; }
+    });
+    return { subjects: order.map(function (s) { return map[s]; }), matched: matched, unmatched: unmatched, skipped: skipped };
+  }
+  function buildClassFromMaster(master, classKey, subjects, opts) {
+    opts = opts || {};
+    var rows = master.filter(function (r) { return r.grade + '|' + r.cls === classKey; });
+    var students = {};
+    rows.forEach(function (r) { students[r.no] = { no: r.no, name: r.name, kind: r.kind || '', notes: r.kind ? [r.kind] : [] }; });
+    var list = Object.keys(students).map(Number).sort(function (a, b) { return a - b; }).map(function (n) { return students[n]; });
+    var subs = (subjects || []).map(function (s) { return { subject: s.subject, raw: s.raw, group: s.group, nos: s.nos.filter(function (n) { return students[n]; }) }; });
+    if (opts.sortSubjects === 'ga') subs.sort(function (a, b) { return a.subject.localeCompare(b.subject, 'ko'); });
+    var first = rows[0] || {};
+    return { key: classKey, grade: first.grade, cls: first.cls, students: students, studentList: list, subjects: subs };
+  }
+
   /* ---------- 제목 ---------- */
   function titleInfo(subject, oneLineMax) {
     var len = subject.length; // 과목명 글자 수
@@ -305,7 +391,7 @@
     parseDelimited: parseDelimited, rowsToRoster: rowsToRoster, parseRosterText: parseRosterText,
     stripUnit: stripUnit, classKeys: classKeys, buildClass: buildClass, isExcluded: isExcluded, noteExcluded: noteExcluded,
     newPage: newPage, pageSeed: pageSeed, fillPage: fillPage, buildPages: buildPages,
-    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
+    textToRoster: textToRoster, pagesToRoster: pagesToRoster, rosterToTSV: rosterToTSV, applyExclusion: applyExclusion, KINDS: KINDS, normGrade: normGrade, normCls: normCls, normKind: normKind, masterFromTable: masterFromTable, masterClassKeys: masterClassKeys, jamoSim: jamoSim, matchSelections: matchSelections, buildClassFromMaster: buildClassFromMaster, relayout: relayout, reshuffle: reshuffle, titleInfo: titleInfo
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SeatCore = api;
